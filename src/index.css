@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --bg-app:      #F5F4F0;
+  --bg-app:      #F2F1ED;
   --bg-card:     #FFFFFF;
-  --bg-sidebar:  #000000;
+  --bg-sidebar:  #0C0C0C;
   --accent:      #00D4A8;
   --accent-dim:  rgba(0, 212, 168, 0.12);
   --accent-glow: rgba(0, 212, 168, 0.35);
   --text-1:      #0A0A0A;
-  --text-2:      #6B7280;
+  --text-2:      #5C6370;
   --text-3:      #9CA3AF;
-  --border:      #E8E6E0;
-  --border-dark: rgba(255,255,255,0.08);
+  --border:      #E4E2DC;
+  --border-dark: rgba(255,255,255,0.07);
 
   font-family: 'Syne', sans-serif;
   background-color: var(--bg-app);
@@ -30,7 +30,7 @@
 }
 
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(14px); }
+  from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -45,7 +45,7 @@
 
 /* ── Progress bar glow ──────────────────────────── */
 .bar-glow {
-  box-shadow: 0 0 8px var(--accent-glow);
+  box-shadow: 0 0 10px var(--accent-glow);
 }
 
 /* ── Sidebar nav item ───────────────────────────── */
@@ -53,14 +53,22 @@
   position: relative;
   transition: color 0.15s, background 0.15s;
 }
+.nav-item:not(.active):hover {
+  background: rgba(255,255,255,0.04) !important;
+  color: #D1D5DB !important;
+}
+.nav-item:not(.active):hover span {
+  color: #9CA3AF !important;
+}
 .nav-item.active::before {
   content: '';
   position: absolute;
   left: 0; top: 50%;
   transform: translateY(-50%);
-  width: 3px; height: 60%;
+  width: 3px; height: 55%;
   background: var(--accent);
   border-radius: 0 2px 2px 0;
+  box-shadow: 2px 0 8px rgba(0,212,168,0.5);
 }
 
 /* ── Stat card hover lift ───────────────────────── */
@@ -68,8 +76,8 @@
   transition: transform 0.2s cubic-bezier(0.16,1,0.3,1), box-shadow 0.2s;
 }
 .stat-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 32px -8px rgba(0,0,0,0.10);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px -6px rgba(0,0,0,0.09);
 }
 
 /* ── Chart tooltip ──────────────────────────────── */
@@ -77,12 +85,25 @@
   border-radius: 10px !important;
   border: 1px solid var(--border) !important;
   box-shadow: 0 8px 24px rgba(0,0,0,0.08) !important;
+  font-family: 'Syne', sans-serif !important;
 }
 
 /* ── Scrollbar ──────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #D1D0CB; border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: #CECCC6; border-radius: 4px; }
+
+/* ── Sidebar scrollbar darker ───────────────────── */
+aside::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); }
 
 /* ── Select ─────────────────────────────────────── */
 select { appearance: none; -webkit-appearance: none; }
+
+/* ── Pulse dot for live indicator ───────────────── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}

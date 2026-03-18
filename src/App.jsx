@@ -52,6 +52,8 @@ const App = () => {
   const [filterRegion,   setFilterRegion]   = useState('All');
   const [filterManager,  setFilterManager]  = useState('All');
   const [filterEmployee, setFilterEmployee] = useState('All');
+  const [isClearing,    setIsClearing]    = useState(false);
+  const [confirmClear,  setConfirmClear]  = useState(false);
 
   useEffect(() => {
     signInAnonymously(auth).catch(e => console.warn('Auth:', e.message));
@@ -98,6 +100,24 @@ const App = () => {
     if (filterEmployee !== 'All' && d.employee !== filterEmployee) return false;
     return true;
   }), [hoursData, selectedMonth, filterRegion, filterManager, filterEmployee]);
+
+  const handleClearDatabase = async () => {
+    setIsClearing(true);
+    try {
+      const col  = collection(db, 'artifacts', appId, 'public', 'data', 'ps_entries_v2');
+      const snap = await getDocs(col);
+      if (!snap.empty) {
+        let batch = writeBatch(db), count = 0;
+        for (const d of snap.docs) {
+          batch.delete(d.ref);
+          if (++count === 450) { await batch.commit(); batch = writeBatch(db); count = 0; }
+        }
+        if (count > 0) await batch.commit();
+      }
+    } catch (e) { console.error(e); }
+    setIsClearing(false);
+    setConfirmClear(false);
+  };
 
   if (loading) return (
     <div className="flex h-screen items-center justify-center" style={{ background: '#000' }}>
@@ -155,17 +175,100 @@ const App = () => {
           ))}
         </nav>
 
-        {/* Footer */}
-        <div style={{ padding: '16px 16px 24px' }}>
-          <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '10px 12px', border: '1px solid var(--border-dark)' }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: '#4B5563', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Live Database</div>
-            <div className="font-data" style={{ fontSize: 10, color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {/* Footer — DB Status */}
+        <div style={{ padding: '12px 12px 20px' }}>
+          <div style={{
+            position: 'relative', overflow: 'hidden',
+            background: 'rgba(255,255,255,0.03)',
+            borderRadius: 10, padding: '12px 12px 10px',
+            border: '1px solid rgba(255,255,255,0.07)',
+          }}>
+            {/* Top glow line */}
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg, transparent, rgba(0,212,168,0.4), transparent)' }} />
+
+            {/* Header row */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div className="pulse-dot" style={{ width: 5, height: 5, borderRadius: '50%', background: '#00D4A8', boxShadow: '0 0 8px rgba(0,212,168,0.7)' }} />
+                <span style={{ fontSize: 9, fontWeight: 700, color: '#6B7280', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Live</span>
+              </div>
+              <span className="font-data" style={{ fontSize: 9, color: '#374151', fontWeight: 600, letterSpacing: '0.04em' }}>Firestore</span>
+            </div>
+
+            {/* Project ID */}
+            <div className="font-data" style={{ fontSize: 10, color: '#6B7280', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               latamproyect-51db8
             </div>
-            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 6px var(--accent-glow)' }} />
-              <span className="font-data" style={{ fontSize: 10, color: '#4B5563' }}>{hoursData.length} records</span>
+
+            {/* Record count */}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 10 }}>
+              <Database size={10} style={{ color: '#4B5563', marginBottom: -1 }} />
+              <span className="font-data" style={{ fontSize: 18, fontWeight: 700, color: '#E5E7EB', lineHeight: 1 }}>{hoursData.length}</span>
+              <span style={{ fontSize: 9, color: '#4B5563', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>records</span>
             </div>
+
+            {/* Divider */}
+            <div style={{ height: 1, background: 'rgba(255,255,255,0.05)', marginBottom: 10 }} />
+
+            {/* Clear button — two step */}
+            {!confirmClear ? (
+              <button
+                onClick={() => setConfirmClear(true)}
+                style={{
+                  width: '100%', padding: '6px 0',
+                  background: 'rgba(248,113,113,0.06)',
+                  border: '1px solid rgba(248,113,113,0.15)',
+                  borderRadius: 6, color: '#6B7280',
+                  fontSize: 9, fontWeight: 700, fontFamily: 'Syne, sans-serif',
+                  letterSpacing: '0.08em', textTransform: 'uppercase',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.color = '#F87171'; e.currentTarget.style.borderColor = 'rgba(248,113,113,0.4)'; e.currentTarget.style.background = 'rgba(248,113,113,0.12)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = '#6B7280'; e.currentTarget.style.borderColor = 'rgba(248,113,113,0.15)'; e.currentTarget.style.background = 'rgba(248,113,113,0.06)'; }}
+              >
+                Clear all records
+              </button>
+            ) : (
+              <div>
+                <p style={{ fontSize: 9, color: '#F87171', fontWeight: 700, textAlign: 'center', margin: '0 0 6px', letterSpacing: '0.04em' }}>
+                  Delete {hoursData.length} records?
+                </p>
+                <div style={{ display: 'flex', gap: 5 }}>
+                  <button
+                    onClick={handleClearDatabase}
+                    disabled={isClearing}
+                    style={{
+                      flex: 1, padding: '6px 0',
+                      background: isClearing ? 'rgba(248,113,113,0.3)' : '#EF4444',
+                      border: 'none', borderRadius: 6, color: '#fff',
+                      fontSize: 9, fontWeight: 800, fontFamily: 'Syne, sans-serif',
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
+                      cursor: isClearing ? 'not-allowed' : 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                    }}
+                  >
+                    {isClearing ? <Loader2 size={9} className="animate-spin" /> : null}
+                    {isClearing ? 'Deleting' : 'Confirm'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmClear(false)}
+                    disabled={isClearing}
+                    style={{
+                      flex: 1, padding: '6px 0',
+                      background: 'rgba(255,255,255,0.04)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: 6, color: '#6B7280',
+                      fontSize: 9, fontWeight: 700, fontFamily: 'Syne, sans-serif',
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </aside>
