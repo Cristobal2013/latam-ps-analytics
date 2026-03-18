@@ -449,7 +449,13 @@ const UploadView = ({ setActiveTab }) => {
               const headersClean = jsonAoa[headerRowIndex].map(h => String(h || '').toLowerCase().replace(/[^a-z]/g, ''));
               const rows = jsonAoa.slice(headerRowIndex + 1);
 
-              const getExactIdx = (validNames) => headersClean.findIndex(h => validNames.includes(h));
+              const getExactIdx = (validNames) => {
+                for (const name of validNames) {
+                  const idx = headersClean.indexOf(name);
+                  if (idx !== -1) return idx;
+                }
+                return -1;
+              };
               
               const idxEmp = getExactIdx(['employeename', 'ownername']);
               const idxMan = getExactIdx(['managername', 'ownermanager']);
