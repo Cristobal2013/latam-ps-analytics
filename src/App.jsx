@@ -5,12 +5,12 @@ import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getFirestore, collection, doc, onSnapshot, writeBatch, getDocs } from 'firebase/firestore';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Cell, PieChart, Pie, Legend
+  Cell, PieChart, Pie
 } from 'recharts';
 import {
   LayoutDashboard, Upload, Users, FileText, Loader2, TrendingUp, Clock,
   AlertCircle, CheckCircle2, Search, ChevronRight, FileSpreadsheet, Database,
-  Globe2, UserCheck, Target, CalendarDays, Briefcase
+  Globe2, UserCheck, Target, Briefcase, Activity
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -22,43 +22,47 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-const app = initializeApp(firebaseConfig);
+const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+const db   = getFirestore(app);
 const appId = 'ps-utilization-v2';
 
 const REGION_COLORS = {
-  'LATAM':          '#3b82f6',
-  'EMEA':           '#10b981',
-  'COE':            '#8b5cf6',
-  'SUT':            '#f59e0b',
-  'Trust Services': '#ec4899',
-  'UP Consulting':  '#06b6d4',
-  'N/A':            '#94a3b8',
+  'LATAM':          '#00D4A8',
+  'EMEA':           '#FFB800',
+  'COE':            '#A78BFA',
+  'SUT':            '#FB923C',
+  'Trust Services': '#F472B6',
+  'UP Consulting':  '#38BDF8',
+  'N/A':            '#6B7280',
 };
 
-const NB_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#a855f7','#64748b'];
+const NB_COLORS = ['#00D4A8','#FFB800','#A78BFA','#FB923C','#F472B6','#38BDF8','#4ADE80','#F87171','#FBBF24','#818CF8','#6B7280'];
 
+const semaphore = (pct) =>
+  pct >= 75 ? '#00D4A8' : pct >= 50 ? '#FFB800' : '#F87171';
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
 const App = () => {
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [hoursData, setHoursData] = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [activeTab, setActiveTab]   = useState('dashboard');
+  const [hoursData, setHoursData]   = useState([]);
 
-  const [selectedMonth, setSelectedMonth] = useState('All');
-  const [filterRegion, setFilterRegion]   = useState('All');
-  const [filterManager, setFilterManager] = useState('All');
+  const [selectedMonth,  setSelectedMonth]  = useState('All');
+  const [filterRegion,   setFilterRegion]   = useState('All');
+  const [filterManager,  setFilterManager]  = useState('All');
   const [filterEmployee, setFilterEmployee] = useState('All');
 
   useEffect(() => {
-    signInAnonymously(auth).catch((e) => console.warn('Auth:', e.message));
+    signInAnonymously(auth).catch(e => console.warn('Auth:', e.message));
   }, []);
 
   useEffect(() => {
     const col = collection(db, 'artifacts', appId, 'public', 'data', 'ps_entries_v2');
-    const unsub = onSnapshot(col, (snap) => {
-      setHoursData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLoading(false);
-    }, (err) => { console.error(err); setLoading(false); });
+    const unsub = onSnapshot(col,
+      snap => { setHoursData(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false); },
+      err  => { console.error(err); setLoading(false); }
+    );
     return () => unsub();
   }, []);
 
@@ -68,108 +72,141 @@ const App = () => {
   }, [hoursData]);
 
   const regions = useMemo(() => {
-    const base = filterMonth => filterMonth === 'All' ? hoursData : hoursData.filter(d => d.month === filterMonth);
-    return ['All', ...new Set(base(selectedMonth).map(d => d.region || 'N/A'))].sort();
+    const base = selectedMonth === 'All' ? hoursData : hoursData.filter(d => d.month === selectedMonth);
+    return ['All', ...new Set(base.map(d => d.region || 'N/A'))].sort();
   }, [hoursData, selectedMonth]);
 
   const managers = useMemo(() => {
     const base = hoursData
-      .filter(d => selectedMonth === 'All' || d.month === selectedMonth)
+      .filter(d => selectedMonth === 'All' || d.month  === selectedMonth)
       .filter(d => filterRegion  === 'All' || d.region === filterRegion);
     return ['All', ...new Set(base.map(d => d.manager))].sort();
   }, [hoursData, selectedMonth, filterRegion]);
 
   const employees = useMemo(() => {
     const base = hoursData
-      .filter(d => selectedMonth === 'All' || d.month === selectedMonth)
-      .filter(d => filterRegion  === 'All' || d.region === filterRegion)
-      .filter(d => filterManager === 'All' || d.manager === filterManager);
+      .filter(d => selectedMonth  === 'All' || d.month   === selectedMonth)
+      .filter(d => filterRegion   === 'All' || d.region  === filterRegion)
+      .filter(d => filterManager  === 'All' || d.manager === filterManager);
     return ['All', ...new Set(base.map(d => d.employee))].sort();
   }, [hoursData, selectedMonth, filterRegion, filterManager]);
 
   const filteredData = useMemo(() => hoursData.filter(d => {
-    if (selectedMonth !== 'All' && d.month    !== selectedMonth)  return false;
-    if (filterRegion  !== 'All' && d.region   !== filterRegion)   return false;
-    if (filterManager !== 'All' && d.manager  !== filterManager)  return false;
+    if (selectedMonth  !== 'All' && d.month    !== selectedMonth)  return false;
+    if (filterRegion   !== 'All' && d.region   !== filterRegion)   return false;
+    if (filterManager  !== 'All' && d.manager  !== filterManager)  return false;
     if (filterEmployee !== 'All' && d.employee !== filterEmployee) return false;
     return true;
   }), [hoursData, selectedMonth, filterRegion, filterManager, filterEmployee]);
 
-  const resetFilters = (except = {}) => {
-    if (!except.region)   setFilterRegion('All');
-    if (!except.manager)  setFilterManager('All');
-    if (!except.employee) setFilterEmployee('All');
-  };
-
   if (loading) return (
-    <div className="flex h-screen items-center justify-center bg-slate-50">
+    <div className="flex h-screen items-center justify-center" style={{ background: '#000' }}>
       <div className="flex flex-col items-center gap-4">
-        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-        <p className="text-slate-400 font-medium animate-pulse text-sm">Downloading data from the server...</p>
+        <div className="relative">
+          <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#00D4A8' }} />
+          <div className="absolute inset-0 blur-md" style={{ background: '#00D4A8', opacity: 0.3 }} />
+        </div>
+        <p className="font-data text-xs tracking-widest uppercase" style={{ color: '#6B7280' }}>
+          Connecting to database
+        </p>
       </div>
     </div>
   );
 
   return (
-    <div className="flex h-screen bg-[#F8FAFC] text-slate-900 font-sans overflow-hidden">
-      <aside className="w-64 bg-[#0F172A] text-white flex flex-col shrink-0 shadow-2xl overflow-y-auto">
-        <div className="p-6">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 bg-blue-500/10 rounded-lg">
-              <TrendingUp size={22} className="text-blue-400" />
+    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-app)', fontFamily: 'Syne, sans-serif' }}>
+
+      {/* ── Sidebar ── */}
+      <aside className="flex flex-col shrink-0 overflow-y-auto" style={{ width: 220, background: 'var(--bg-sidebar)' }}>
+        {/* Logo */}
+        <div style={{ padding: '28px 20px 24px' }}>
+          <div className="flex items-center gap-2.5">
+            <div style={{ width: 28, height: 28, background: 'var(--accent)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Activity size={15} color="#000" strokeWidth={2.5} />
             </div>
-            <span className="font-black text-xl tracking-tight text-white">PS Analytics</span>
+            <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.02em', color: '#fff' }}>PS Analytics</span>
           </div>
-          <div className="h-1 w-12 bg-blue-500 rounded-full mt-2 ml-1"></div>
+          <div style={{ marginTop: 16, height: '1px', background: 'var(--border-dark)' }} />
         </div>
 
-        <nav className="flex-1 px-3 space-y-1">
-          <SidebarItem icon={<LayoutDashboard size={18} />} label="Dashboard"        active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-          <SidebarItem icon={<Upload size={18} />}          label="Upload Report"    active={activeTab === 'upload'}    onClick={() => setActiveTab('upload')} />
-          <SidebarItem icon={<Globe2 size={18} />}          label="By Region"        active={activeTab === 'regions'}   onClick={() => setActiveTab('regions')} />
-          <SidebarItem icon={<Users size={18} />}           label="By Manager"       active={activeTab === 'managers'}  onClick={() => setActiveTab('managers')} />
-          <SidebarItem icon={<FileText size={18} />}        label="By Employee"      active={activeTab === 'employees'} onClick={() => setActiveTab('employees')} />
+        {/* Nav */}
+        <nav style={{ flex: 1, padding: '0 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {[
+            { key: 'dashboard', icon: <LayoutDashboard size={15} />, label: 'Dashboard' },
+            { key: 'upload',    icon: <Upload size={15} />,          label: 'Upload Report' },
+            { key: 'regions',   icon: <Globe2 size={15} />,          label: 'By Region' },
+            { key: 'managers',  icon: <Users size={15} />,           label: 'By Manager' },
+            { key: 'employees', icon: <FileText size={15} />,        label: 'By Employee' },
+          ].map(item => (
+            <button key={item.key} onClick={() => setActiveTab(item.key)}
+              className={`nav-item ${activeTab === item.key ? 'active' : ''}`}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '9px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                width: '100%', textAlign: 'left', fontSize: 13, fontWeight: activeTab === item.key ? 700 : 500,
+                fontFamily: 'Syne, sans-serif',
+                background: activeTab === item.key ? 'rgba(255,255,255,0.06)' : 'transparent',
+                color: activeTab === item.key ? '#fff' : '#6B7280',
+                transition: 'all 0.15s',
+              }}>
+              <span style={{ color: activeTab === item.key ? 'var(--accent)' : '#4B5563' }}>{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
         </nav>
 
-        <div className="p-4 mt-auto">
-          <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1 text-center">Database</p>
-            <p className="text-[11px] text-blue-400 font-mono text-center truncate">latamproyect-51db8</p>
+        {/* Footer */}
+        <div style={{ padding: '16px 16px 24px' }}>
+          <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '10px 12px', border: '1px solid var(--border-dark)' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#4B5563', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Live Database</div>
+            <div className="font-data" style={{ fontSize: 10, color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              latamproyect-51db8
+            </div>
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 6px var(--accent-glow)' }} />
+              <span className="font-data" style={{ fontSize: 10, color: '#4B5563' }}>{hoursData.length} records</span>
+            </div>
           </div>
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0">
-        <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-4 sticky top-0 z-30">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-black text-slate-800 tracking-tight">Control Panel</h2>
-              <div className="flex items-center gap-2 mt-0.5">
-                <p className="text-xs text-slate-400 font-medium">PS Utilization Overview</p>
-                <span className="text-slate-300">•</span>
-                <div className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                  <Database size={11} />
-                  <span>{hoursData.length} records</span>
-                </div>
-                {filteredData.length !== hoursData.length && (
-                  <div className="flex items-center gap-1.5 text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                    <span>{filteredData.length} filtered</span>
-                  </div>
-                )}
-              </div>
-            </div>
+      {/* ── Main ── */}
+      <main className="flex flex-col flex-1 min-w-0">
 
-            <div className="flex gap-3 items-end flex-wrap justify-end">
-              <FilterControl label="Month"    value={selectedMonth}  options={availableMonths} onChange={v => { setSelectedMonth(v); resetFilters(); }} />
-              <FilterControl label="Region"   value={filterRegion}   options={regions}         onChange={v => { setFilterRegion(v); setFilterManager('All'); setFilterEmployee('All'); }} />
-              <FilterControl label="Manager"  value={filterManager}  options={managers}        onChange={v => { setFilterManager(v); setFilterEmployee('All'); }} />
-              <FilterControl label="Employee" value={filterEmployee} options={employees}       onChange={setFilterEmployee} />
+        {/* Header */}
+        <header style={{
+          background: 'rgba(245,244,240,0.85)', backdropFilter: 'blur(12px)',
+          borderBottom: '1px solid var(--border)',
+          padding: '14px 32px', position: 'sticky', top: 0, zIndex: 30,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text-1)', margin: 0 }}>
+                Control Panel
+              </h2>
+              {filteredData.length !== hoursData.length && (
+                <span className="font-data" style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-dim)', padding: '2px 8px', borderRadius: 20 }}>
+                  {filteredData.length} filtered
+                </span>
+              )}
             </div>
+            <p style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 500, margin: '2px 0 0', letterSpacing: '0.02em' }}>
+              PS Utilization · LATAM Overview
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <FilterControl label="Month"    value={selectedMonth}  options={availableMonths} onChange={v => { setSelectedMonth(v); setFilterRegion('All'); setFilterManager('All'); setFilterEmployee('All'); }} />
+            <FilterControl label="Region"   value={filterRegion}   options={regions}         onChange={v => { setFilterRegion(v); setFilterManager('All'); setFilterEmployee('All'); }} />
+            <FilterControl label="Manager"  value={filterManager}  options={managers}        onChange={v => { setFilterManager(v); setFilterEmployee('All'); }} />
+            <FilterControl label="Employee" value={filterEmployee} options={employees}       onChange={setFilterEmployee} />
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8">
-          <div className="max-w-7xl mx-auto">
+        {/* Content */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px' }}>
+          <div style={{ maxWidth: 1280, margin: '0 auto' }}>
             {activeTab === 'dashboard' && <DashboardView data={filteredData} />}
             {activeTab === 'upload'    && <UploadView setActiveTab={setActiveTab} />}
             {activeTab === 'regions'   && <RegionView data={filteredData} />}
@@ -182,42 +219,37 @@ const App = () => {
   );
 };
 
-const SidebarItem = ({ icon, label, active, onClick }) => (
-  <button
-    onClick={onClick}
-    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
-      active ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
-    }`}
-  >
-    <span className={`${active ? 'text-white' : 'text-slate-500 group-hover:text-blue-400'} transition-colors`}>{icon}</span>
-    <span className="text-sm font-bold tracking-wide">{label}</span>
-    {active && <ChevronRight size={14} className="ml-auto opacity-50" />}
-  </button>
-);
-
+// ─── FILTER CONTROL ───────────────────────────────────────────────────────────
 const FilterControl = ({ label, value, options, onChange }) => (
-  <div className="flex flex-col gap-1">
-    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      className="text-xs font-bold bg-slate-100 border-none rounded-xl px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer min-w-[120px]"
-    >
-      {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-    </select>
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.1em', textTransform: 'uppercase', paddingLeft: 2 }}>
+      {label}
+    </label>
+    <div style={{ position: 'relative' }}>
+      <select value={value} onChange={e => onChange(e.target.value)} style={{
+        fontFamily: 'Syne, sans-serif', fontSize: 12, fontWeight: 600,
+        color: 'var(--text-1)', background: '#fff',
+        border: '1px solid var(--border)', borderRadius: 8,
+        padding: '7px 28px 7px 10px', outline: 'none', cursor: 'pointer',
+        minWidth: 120, appearance: 'none',
+      }}>
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+      <ChevronRight size={12} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%) rotate(90deg)', color: 'var(--text-3)', pointerEvents: 'none' }} />
+    </div>
   </div>
 );
 
-// ─── DASHBOARD ───────────────────────────────────────────────────────────────
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
 const DashboardView = ({ data }) => {
   const [chartView, setChartView] = useState('employee');
 
   const stats = useMemo(() => {
-    const total     = data.reduce((s, d) => s + (d.hours || 0), 0);
+    const total     = data.reduce((s, d) => s + (d.hours          || 0), 0);
     const available = data.reduce((s, d) => s + (d.availableHours || 0), 0);
-    const billable  = data.reduce((s, d) => s + (d.billableHours || 0), 0);
+    const billable  = data.reduce((s, d) => s + (d.billableHours  || 0), 0);
     const nonBill   = data.reduce((s, d) => s + (d.nonBillableHours || 0), 0);
-    const target    = data.reduce((s, d) => s + (d.targetHours || 0), 0);
+    const target    = data.reduce((s, d) => s + (d.targetHours    || 0), 0);
     const headcount = new Set(data.map(d => d.employee)).size;
     return {
       total, available, billable, nonBill, target, headcount,
@@ -237,17 +269,12 @@ const DashboardView = ({ data }) => {
       map[k].billable  += (d.billableHours  || 0);
       map[k].available += (d.availableHours || 0);
     });
-    let results = Object.values(map).map(item => ({
+    let r = Object.values(map).map(item => ({
       name: item.name,
       utilPercent: item.available > 0 ? Number(((item.billable / item.available) * 100).toFixed(1)) : 0
-    }));
-    if (chartView === 'month' || chartView === 'region') {
-      results.sort((a, b) => b.utilPercent - a.utilPercent);
-    } else {
-      results.sort((a, b) => b.utilPercent - a.utilPercent);
-      results = results.slice(0, 15);
-    }
-    return results;
+    })).sort((a, b) => b.utilPercent - a.utilPercent);
+    if (chartView === 'employee') r = r.slice(0, 15);
+    return r;
   }, [data, chartView]);
 
   const nbBreakdown = useMemo(() => {
@@ -261,7 +288,7 @@ const DashboardView = ({ data }) => {
       { key: 'nbProductIssues',      label: 'Product Issues' },
       { key: 'nbMigration',          label: 'Migration' },
       { key: 'nbMarketing',          label: 'Marketing' },
-      { key: 'nbTrainerOnboarding',  label: 'Trainer Onboarding' },
+      { key: 'nbTrainerOnboarding',  label: 'Trainer' },
       { key: 'nbLeave',              label: 'Leave' },
     ];
     return cats
@@ -272,58 +299,83 @@ const DashboardView = ({ data }) => {
 
   if (!data.length) return <EmptyState />;
 
-  return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+  const kpis = [
+    { label: 'Headcount',    value: stats.headcount,                     unit: '',  icon: <UserCheck size={16} />, accent: '#00D4A8' },
+    { label: 'Logged Hours', value: stats.total.toFixed(0),              unit: 'h', icon: <Clock size={16} />,     accent: '#6B7280' },
+    { label: 'Utilization',  value: stats.util.toFixed(1),               unit: '%', icon: <Activity size={16} />,  accent: semaphore(stats.util) },
+    { label: 'Attainment',   value: stats.attainment.toFixed(1),         unit: '%', icon: <Target size={16} />,    accent: semaphore(stats.attainment) },
+    { label: 'Billable',     value: stats.billable.toFixed(0),           unit: 'h', icon: <CheckCircle2 size={16} />, accent: '#00D4A8' },
+    { label: 'Non-Billable', value: stats.nonBill.toFixed(0),            unit: 'h', icon: <AlertCircle size={16} />,  accent: '#FFB800' },
+  ];
 
-      {/* KPI row */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <StatCard title="Headcount"       value={stats.headcount}              icon={<UserCheck size={20}/>}    color="blue" />
-        <StatCard title="Logged Hours"    value={stats.total.toFixed(0)}       icon={<Clock size={20}/>}        color="slate" />
-        <StatCard title="Utilization"     value={`${stats.util.toFixed(1)}%`}  icon={<TrendingUp size={20}/>}   color="emerald" />
-        <StatCard title="Attainment"      value={`${stats.attainment.toFixed(1)}%`} icon={<Target size={20}/>} color="indigo" />
-        <StatCard title="Billable"        value={stats.billable.toFixed(0)}    icon={<CheckCircle2 size={20}/>} color="cyan" />
-        <StatCard title="Non-Billable"    value={stats.nonBill.toFixed(0)}     icon={<AlertCircle size={20}/>}  color="amber" />
+  return (
+    <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+      {/* KPI Row */}
+      <div className="card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12 }}>
+        {kpis.map((kpi, i) => (
+          <div key={i} className="stat-card" style={{
+            background: 'var(--bg-card)', borderRadius: 12,
+            border: '1px solid var(--border)', padding: '18px 18px 16px',
+            display: 'flex', flexDirection: 'column', gap: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{kpi.label}</span>
+              <span style={{ color: kpi.accent, opacity: 0.8 }}>{kpi.icon}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+              <span className="font-data" style={{ fontSize: 28, fontWeight: 700, lineHeight: 1, color: 'var(--text-1)', letterSpacing: '-0.02em' }}>
+                {kpi.value}
+              </span>
+              <span className="font-data" style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-3)' }}>{kpi.unit}</span>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Main charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Charts Row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16 }}>
 
-        {/* Utilization bar chart with 3-way toggle */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col">
-          <div className="flex items-center justify-between mb-6">
+        {/* Utilization Bar Chart */}
+        <div style={{ background: 'var(--bg-card)', borderRadius: 16, border: '1px solid var(--border)', padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
             <div>
-              <h3 className="font-black text-slate-800 text-base">Utilization Distribution</h3>
-              <p className="text-xs text-slate-400 font-medium">% Billable / Available</p>
+              <h3 style={{ fontSize: 14, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text-1)', margin: 0 }}>Utilization Distribution</h3>
+              <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '3px 0 0' }}>Billable ÷ Available hours</p>
             </div>
-            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shadow-inner gap-0.5">
-              {[['employee','Personnel'],['region','Region'],['month','Month']].map(([v, label]) => (
-                <button key={v} onClick={() => setChartView(v)}
-                  className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${chartView === v ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                  {label}
-                </button>
+            <div style={{ display: 'flex', background: '#F5F4F0', borderRadius: 8, padding: 3, gap: 2 }}>
+              {[['employee','Personnel'],['region','Region'],['month','Month']].map(([v, lbl]) => (
+                <button key={v} onClick={() => setChartView(v)} style={{
+                  padding: '5px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                  fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
+                  fontFamily: 'Syne, sans-serif',
+                  background: chartView === v ? '#fff' : 'transparent',
+                  color: chartView === v ? 'var(--text-1)' : 'var(--text-3)',
+                  boxShadow: chartView === v ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                  transition: 'all 0.15s',
+                }}>{lbl}</button>
               ))}
             </div>
           </div>
-          <div className="flex-1 min-h-[280px]">
+          <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: chartView === 'employee' ? 55 : 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <BarChart data={chartData} margin={{ top: 4, right: 4, left: -28, bottom: chartView === 'employee' ? 52 : 4 }}>
+                <CartesianGrid strokeDasharray="2 4" vertical={false} stroke="#F0EEE9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false}
-                  tick={{ fontSize: 10, fill: '#64748b', fontWeight: 600 }}
-                  angle={chartView === 'employee' ? -40 : 0}
+                  tick={{ fontSize: 10, fill: '#9CA3AF', fontFamily: 'Syne, sans-serif', fontWeight: 600 }}
+                  angle={chartView === 'employee' ? -38 : 0}
                   textAnchor={chartView === 'employee' ? 'end' : 'middle'} />
                 <YAxis fontSize={10} axisLine={false} tickLine={false}
-                  tick={{ fill: '#94a3b8' }} tickFormatter={v => `${v}%`} />
-                <Tooltip cursor={{ fill: '#f8fafc' }}
-                  contentStyle={{ borderRadius: '14px', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)' }}
+                  tick={{ fill: '#9CA3AF', fontFamily: 'JetBrains Mono, monospace' }}
+                  tickFormatter={v => `${v}%`} />
+                <Tooltip
+                  cursor={{ fill: 'rgba(0,0,0,0.03)', radius: 6 }}
+                  contentStyle={{ fontFamily: 'Syne, sans-serif', borderRadius: 10, border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(0,0,0,0.08)', fontSize: 12 }}
                   formatter={v => [`${v}%`, 'Utilization']} />
-                <Bar dataKey="utilPercent" name="% Utilization" radius={[4,4,0,0]}
-                  barSize={chartView === 'employee' ? 20 : 40}>
+                <Bar dataKey="utilPercent" radius={[4,4,0,0]} barSize={chartView === 'employee' ? 18 : 36}>
                   {chartData.map((entry, i) => (
                     <Cell key={i} fill={
-                      chartView === 'region' ? (REGION_COLORS[entry.name] || '#94a3b8') :
-                      entry.utilPercent >= 75 ? '#10b981' :
-                      entry.utilPercent >= 50 ? '#f59e0b' : '#ef4444'
+                      chartView === 'region' ? (REGION_COLORS[entry.name] || '#6B7280') : semaphore(entry.utilPercent)
                     } />
                   ))}
                 </Bar>
@@ -332,74 +384,87 @@ const DashboardView = ({ data }) => {
           </div>
         </div>
 
-        {/* Hours mix pie */}
-        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col">
-          <h3 className="font-black text-slate-800 text-base mb-4 text-center">Hours Mix</h3>
-          <div className="flex-1 flex flex-col items-center justify-center">
-            <div className="h-44 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={[
-                    { name: 'Billable', value: stats.billable },
-                    { name: 'Non-Billable', value: stats.nonBill }
-                  ]} innerRadius={50} outerRadius={72} paddingAngle={6} dataKey="value">
-                    <Cell fill="#3b82f6" stroke="none" />
-                    <Cell fill="#e2e8f0" stroke="none" />
-                  </Pie>
-                  <Tooltip contentStyle={{ borderRadius: '14px', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="w-full mt-4 space-y-2">
-              <LegendItem label="Billable"     value={stats.billable} color="bg-blue-500" />
-              <LegendItem label="Non-Billable" value={stats.nonBill}  color="bg-slate-200" />
-            </div>
-            <div className="w-full mt-4 pt-4 border-t border-slate-100 space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400 font-bold">Target Hours</span>
-                <span className="font-black text-slate-700">{stats.target.toFixed(0)}h</span>
+        {/* Hours Mix */}
+        <div style={{ background: 'var(--bg-card)', borderRadius: 16, border: '1px solid var(--border)', padding: '24px', display: 'flex', flexDirection: 'column' }}>
+          <h3 style={{ fontSize: 14, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text-1)', margin: '0 0 4px', textAlign: 'center' }}>Hours Mix</h3>
+          <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '0 0 16px', textAlign: 'center' }}>Billable vs Non-Billable</p>
+
+          <div style={{ height: 160 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={[
+                  { name: 'Billable',     value: stats.billable },
+                  { name: 'Non-Billable', value: stats.nonBill  },
+                ]} innerRadius={48} outerRadius={68} paddingAngle={5} dataKey="value" startAngle={90} endAngle={-270}>
+                  <Cell fill="#00D4A8" stroke="none" />
+                  <Cell fill="#F0EEE9" stroke="none" />
+                </Pie>
+                <Tooltip contentStyle={{ fontFamily: 'Syne, sans-serif', borderRadius: 10, border: '1px solid var(--border)', fontSize: 12 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+            {[
+              { label: 'Billable',     value: stats.billable,  color: '#00D4A8' },
+              { label: 'Non-Billable', value: stats.nonBill,   color: '#E5E3DC' },
+            ].map((row, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: row.color }} />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>{row.label}</span>
+                </div>
+                <span className="font-data" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)' }}>{row.value.toFixed(0)}h</span>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400 font-bold">Attainment</span>
-                <span className={`font-black ${stats.attainment >= 75 ? 'text-emerald-600' : stats.attainment >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-                  {stats.attainment.toFixed(1)}%
-                </span>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {[
+              { label: 'Target',     value: `${stats.target.toFixed(0)}h` },
+              { label: 'Attainment', value: `${stats.attainment.toFixed(1)}%`, color: semaphore(stats.attainment) },
+            ].map((row, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)' }}>{row.label}</span>
+                <span className="font-data" style={{ fontSize: 12, fontWeight: 700, color: row.color || 'var(--text-1)' }}>{row.value}</span>
               </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Non-billable breakdown */}
+      {/* Non-Billable Breakdown */}
       {nbBreakdown.length > 0 && (
-        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
-          <div className="mb-5">
-            <h3 className="font-black text-slate-800 text-base">Non-Billable Breakdown</h3>
-            <p className="text-xs text-slate-400 font-medium">Hours by category</p>
+        <div style={{ background: 'var(--bg-card)', borderRadius: 16, border: '1px solid var(--border)', padding: '24px' }}>
+          <div style={{ marginBottom: 20 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text-1)', margin: 0 }}>Non-Billable Breakdown</h3>
+            <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '3px 0 0' }}>Hours by category</p>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="h-64">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+            <div style={{ height: 240 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={nbBreakdown} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                  <XAxis type="number" fontSize={10} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8' }} />
-                  <YAxis type="category" dataKey="label" width={130} fontSize={11} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontWeight: 600 }} />
-                  <Tooltip contentStyle={{ borderRadius: '14px', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)' }}
+                <BarChart data={nbBreakdown} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="2 4" horizontal={false} stroke="#F0EEE9" />
+                  <XAxis type="number" fontSize={10} axisLine={false} tickLine={false}
+                    tick={{ fill: '#9CA3AF', fontFamily: 'JetBrains Mono, monospace' }} />
+                  <YAxis type="category" dataKey="label" width={120} fontSize={11} axisLine={false} tickLine={false}
+                    tick={{ fill: 'var(--text-2)', fontFamily: 'Syne, sans-serif', fontWeight: 600 }} />
+                  <Tooltip contentStyle={{ fontFamily: 'Syne, sans-serif', borderRadius: 10, border: '1px solid var(--border)', fontSize: 12 }}
                     formatter={v => [`${v.toFixed(1)}h`, 'Hours']} />
-                  <Bar dataKey="value" radius={[0,4,4,0]} barSize={16}>
-                    {nbBreakdown.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  <Bar dataKey="value" radius={[0,4,4,0]} barSize={14}>
+                    {nbBreakdown.map((e, i) => <Cell key={i} fill={e.color} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <div className="grid grid-cols-2 gap-2 content-start">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, alignContent: 'start' }}>
               {nbBreakdown.map((cat, i) => (
-                <div key={i} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }}></div>
-                    <span className="text-xs font-bold text-slate-600 truncate">{cat.label}</span>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F8F7F4', borderRadius: 8, padding: '8px 10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color, flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>{cat.label}</span>
                   </div>
-                  <span className="text-xs font-black text-slate-800 ml-2">{cat.value.toFixed(0)}h</span>
+                  <span className="font-data" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-1)', marginLeft: 6 }}>{cat.value.toFixed(0)}h</span>
                 </div>
               ))}
             </div>
@@ -410,72 +475,88 @@ const DashboardView = ({ data }) => {
   );
 };
 
-// ─── REGION VIEW ─────────────────────────────────────────────────────────────
+// ─── REGION VIEW ──────────────────────────────────────────────────────────────
 const RegionView = ({ data }) => {
-  const regions = useMemo(() => {
+  const regionList = useMemo(() => {
     const map = {};
     data.forEach(d => {
       const k = d.region || 'N/A';
-      if (!map[k]) map[k] = { name: k, billable: 0, available: 0, target: 0, total: 0, employees: new Set() };
+      if (!map[k]) map[k] = { name: k, billable: 0, available: 0, target: 0, total: 0, empSet: new Set() };
       map[k].billable  += (d.billableHours  || 0);
       map[k].available += (d.availableHours || 0);
       map[k].target    += (d.targetHours    || 0);
       map[k].total     += (d.hours          || 0);
-      map[k].employees.add(d.employee);
+      map[k].empSet.add(d.employee);
     });
-    return Object.values(map)
-      .map(r => ({
-        ...r,
-        headcount:  r.employees.size,
-        util:       r.available > 0 ? (r.billable / r.available) * 100 : 0,
-        attainment: r.target    > 0 ? (r.billable / r.target)    * 100 : 0,
-      }))
-      .sort((a, b) => b.util - a.util);
+    return Object.values(map).map(r => ({
+      name:       r.name,
+      billable:   r.billable,
+      available:  r.available,
+      target:     r.target,
+      total:      r.total,
+      headcount:  r.empSet.size,
+      util:       r.available > 0 ? (r.billable / r.available) * 100 : 0,
+      attainment: r.target    > 0 ? (r.billable / r.target)    * 100 : 0,
+    })).sort((a, b) => b.util - a.util);
   }, [data]);
 
-  if (!regions.length) return <EmptyState />;
+  const noRegionData = regionList.length === 1 && regionList[0].name === 'N/A';
+
+  if (!regionList.length) return <EmptyState />;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {regions.map((region, i) => {
-          const color = REGION_COLORS[region.name] || '#94a3b8';
-          const status = region.util >= 75 ? 'emerald' : region.util >= 50 ? 'amber' : 'red';
-          const statusColors = {
-            emerald: { text: 'text-emerald-600', bar: 'bg-emerald-500', border: 'border-l-emerald-500' },
-            amber:   { text: 'text-amber-500',   bar: 'bg-amber-400',   border: 'border-l-amber-400' },
-            red:     { text: 'text-red-500',      bar: 'bg-red-500',     border: 'border-l-red-500' },
-          }[status];
-
+    <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {noRegionData && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 16px' }}>
+          <AlertCircle size={16} style={{ color: '#F59E0B', flexShrink: 0 }} />
+          <p style={{ fontSize: 12, fontWeight: 600, color: '#92400E', margin: 0 }}>
+            Los datos no tienen región asignada. Ve a <strong>Upload Report</strong> y vuelve a subir el Excel.
+          </p>
+        </div>
+      )}
+      <div className="card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+        {regionList.map((region, i) => {
+          const color  = REGION_COLORS[region.name] || '#6B7280';
+          const pct    = region.util;
           return (
-            <div key={i} className={`bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 hover:shadow-xl transition-all border-l-[6px] ${statusColors.border}`}>
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-black text-sm"
-                    style={{ backgroundColor: color }}>
-                    <Globe2 size={18} />
+            <div key={i} className="stat-card" style={{
+              background: 'var(--bg-card)', borderRadius: 16,
+              border: '1px solid var(--border)',
+              borderLeft: `4px solid ${color}`,
+              padding: '20px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Globe2 size={16} style={{ color }} />
                   </div>
                   <div>
-                    <h4 className="font-black text-slate-800">{region.name}</h4>
-                    <p className="text-xs text-slate-400 font-bold">{region.headcount} employees</p>
+                    <h4 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-1)', margin: 0, letterSpacing: '-0.01em' }}>{region.name}</h4>
+                    <p style={{ fontSize: 11, color: 'var(--text-3)', margin: 0, fontWeight: 500 }}>{region.headcount} employees</p>
                   </div>
                 </div>
-                <p className={`text-3xl font-black ${statusColors.text}`}>{region.util.toFixed(1)}%</p>
+                <span className="font-data" style={{ fontSize: 26, fontWeight: 700, color: semaphore(pct), letterSpacing: '-0.03em' }}>
+                  {pct.toFixed(1)}%
+                </span>
               </div>
 
-              <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden mb-5">
-                <div className={`h-full rounded-full ${statusColors.bar}`} style={{ width: `${Math.min(region.util, 100)}%` }}></div>
+              <div style={{ height: 4, background: '#F0EEE9', borderRadius: 4, overflow: 'hidden', marginBottom: 14 }}>
+                <div className={pct >= 75 ? 'bar-glow' : ''} style={{
+                  height: '100%', width: `${Math.min(pct, 100)}%`,
+                  background: semaphore(pct), borderRadius: 4,
+                  transition: 'width 0.8s cubic-bezier(0.16,1,0.3,1)',
+                }} />
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                 {[
-                  { label: 'Billable',    value: region.billable.toFixed(0)  + 'h' },
-                  { label: 'Non-Bill',    value: (region.total - region.billable > 0 ? region.total - region.billable : 0).toFixed(0) + 'h' },
-                  { label: 'Attainment',  value: region.attainment.toFixed(1) + '%' },
-                ].map((stat, j) => (
-                  <div key={j} className="bg-slate-50 rounded-xl p-2 text-center">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{stat.label}</p>
-                    <p className="text-sm font-black text-slate-800">{stat.value}</p>
+                  { label: 'Billable',   value: region.billable.toFixed(0) + 'h' },
+                  { label: 'Non-Bill',   value: (Math.max(0, region.total - region.billable)).toFixed(0) + 'h' },
+                  { label: 'Attainment', value: region.attainment.toFixed(1) + '%' },
+                ].map((s, j) => (
+                  <div key={j} style={{ background: '#F8F7F4', borderRadius: 8, padding: '8px', textAlign: 'center' }}>
+                    <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 3px' }}>{s.label}</p>
+                    <p className="font-data" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>{s.value}</p>
                   </div>
                 ))}
               </div>
@@ -487,7 +568,7 @@ const RegionView = ({ data }) => {
   );
 };
 
-// ─── GROUPED VIEW (Managers / Employees) ─────────────────────────────────────
+// ─── GROUPED VIEW ─────────────────────────────────────────────────────────────
 const GroupedView = ({ data, groupKey, showDetail = false }) => {
   const sorted = useMemo(() => {
     const map = {};
@@ -495,15 +576,12 @@ const GroupedView = ({ data, groupKey, showDetail = false }) => {
       const k = d[groupKey] || 'N/A';
       if (!map[k]) map[k] = {
         name: k, total: 0, billable: 0, available: 0, target: 0,
-        region: d.region || 'N/A',
-        workerCategory: d.workerCategory || '',
-        orgLeader: d.orgLeader || '',
-        department: d.department || '',
+        region: d.region || 'N/A', workerCategory: d.workerCategory || '',
+        orgLeader: d.orgLeader || '', department: d.department || '',
         nbSovosInternal: 0, nbTimeOff: 0, nbCustomerSupport: 0,
         nbTraining: 0, nbSalesScoping: 0, nbProductDev: 0,
         nbProductIssues: 0, nbMigration: 0, nbMarketing: 0,
         nbTrainerOnboarding: 0, nbLeave: 0,
-        months: new Set(),
       };
       map[k].total     += (d.hours          || 0);
       map[k].billable  += (d.billableHours  || 0);
@@ -520,7 +598,6 @@ const GroupedView = ({ data, groupKey, showDetail = false }) => {
       map[k].nbMarketing         += (d.nbMarketing         || 0);
       map[k].nbTrainerOnboarding += (d.nbTrainerOnboarding || 0);
       map[k].nbLeave             += (d.nbLeave             || 0);
-      if (d.month) map[k].months.add(d.month);
     });
     return Object.values(map).sort((a, b) => b.available - a.available);
   }, [data, groupKey]);
@@ -528,21 +605,14 @@ const GroupedView = ({ data, groupKey, showDetail = false }) => {
   if (!sorted.length) return <EmptyState />;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-in fade-in duration-500">
+    <div className="animate-in card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 14 }}>
       {sorted.map((item, i) => {
-        const utilPercent  = item.available > 0 ? (item.billable / item.available) * 100 : 0;
-        const attainment   = item.target    > 0 ? (item.billable / item.target)    * 100 : 0;
-        const regionColor  = REGION_COLORS[item.region] || '#94a3b8';
+        const util       = item.available > 0 ? (item.billable / item.available) * 100 : 0;
+        const attainment = item.target    > 0 ? (item.billable / item.target)    * 100 : 0;
+        const color      = REGION_COLORS[item.region] || '#6B7280';
+        const barColor   = semaphore(util);
 
-        const status = utilPercent >= 75 ? 'emerald' : utilPercent >= 50 ? 'amber' : 'red';
-        const sc = {
-          emerald: { text: 'text-emerald-600', bar: 'bg-emerald-500', light: 'bg-emerald-50', border: 'border-l-emerald-500' },
-          amber:   { text: 'text-amber-500',   bar: 'bg-amber-400',   light: 'bg-amber-50',   border: 'border-l-amber-400' },
-          red:     { text: 'text-red-500',      bar: 'bg-red-500',     light: 'bg-red-50',     border: 'border-l-red-500' },
-        }[status];
-
-        // Top 3 non-billable categories for this person/manager
-        const nbCats = [
+        const nbTop = [
           { label: 'Sovos Internal', value: item.nbSovosInternal },
           { label: 'Time-Off',       value: item.nbTimeOff },
           { label: 'Cust. Support',  value: item.nbCustomerSupport },
@@ -556,80 +626,98 @@ const GroupedView = ({ data, groupKey, showDetail = false }) => {
         ].filter(c => c.value > 0).sort((a, b) => b.value - a.value).slice(0, 3);
 
         return (
-          <div key={i} className={`bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 hover:shadow-xl transition-all border-l-[6px] ${sc.border} flex flex-col gap-4`}>
+          <div key={i} className="stat-card" style={{
+            background: 'var(--bg-card)', borderRadius: 16,
+            border: '1px solid var(--border)',
+            borderTop: `3px solid ${barColor}`,
+            padding: '18px',
+            display: 'flex', flexDirection: 'column', gap: 14,
+          }}>
             {/* Header */}
-            <div className="flex justify-between items-start">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black shrink-0 text-sm">
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+                  background: '#0A0A0A', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 14, fontWeight: 800, color: '#fff', fontFamily: 'Syne, sans-serif',
+                }}>
                   {item.name.charAt(0)}
                 </div>
-                <div className="min-w-0">
-                  <h4 className="font-black text-slate-800 tracking-tight leading-tight truncate">{item.name}</h4>
-                  {item.department && <p className="text-[10px] text-slate-400 font-medium truncate">{item.department}</p>}
+                <div style={{ minWidth: 0 }}>
+                  <h4 style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-1)', margin: 0, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {item.name}
+                  </h4>
+                  {item.department && (
+                    <p style={{ fontSize: 10, color: 'var(--text-3)', margin: '1px 0 0', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.department}</p>
+                  )}
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: regionColor }}>{item.region}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: color, padding: '2px 8px', borderRadius: 20 }}>{item.region}</span>
                 {item.workerCategory && (
-                  <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{item.workerCategory}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-3)', background: '#F0EEE9', padding: '2px 7px', borderRadius: 20 }}>{item.workerCategory}</span>
                 )}
               </div>
             </div>
 
-            {/* Utilization + Attainment */}
+            {/* Utilization */}
             <div>
-              <div className="flex justify-between items-end mb-2">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 8 }}>
                 <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Attainment</p>
-                  <p className="text-lg font-black text-slate-700">{attainment.toFixed(1)}%</p>
+                  <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 2px' }}>Attainment</p>
+                  <p className="font-data" style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>{attainment.toFixed(1)}%</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Utilization</p>
-                  <p className={`text-4xl font-black leading-none ${sc.text}`}>{utilPercent.toFixed(1)}%</p>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 2px' }}>Utilization</p>
+                  <p className="font-data" style={{ fontSize: 32, fontWeight: 700, lineHeight: 1, color: barColor, margin: 0, letterSpacing: '-0.03em' }}>{util.toFixed(1)}%</p>
                 </div>
               </div>
-              <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full transition-all duration-700 ${sc.bar}`} style={{ width: `${Math.min(utilPercent, 100)}%` }}></div>
+              <div style={{ height: 4, background: '#F0EEE9', borderRadius: 4, overflow: 'hidden' }}>
+                <div className={util >= 75 ? 'bar-glow' : ''} style={{
+                  height: '100%', width: `${Math.min(util, 100)}%`,
+                  background: barColor, borderRadius: 4,
+                  transition: 'width 0.8s cubic-bezier(0.16,1,0.3,1)',
+                }} />
               </div>
             </div>
 
-            {/* Hours summary */}
-            <div className="grid grid-cols-3 gap-2">
+            {/* Hours Summary */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
               {[
                 { label: 'Billable',  value: item.billable.toFixed(0)  + 'h' },
                 { label: 'Available', value: item.available.toFixed(0) + 'h' },
                 { label: 'Target',    value: item.target.toFixed(0)    + 'h' },
               ].map((s, j) => (
-                <div key={j} className="bg-slate-50 rounded-xl p-2 text-center">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">{s.label}</p>
-                  <p className="text-sm font-black text-slate-800">{s.value}</p>
+                <div key={j} style={{ background: '#F8F7F4', borderRadius: 7, padding: '6px', textAlign: 'center' }}>
+                  <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 2px' }}>{s.label}</p>
+                  <p className="font-data" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>{s.value}</p>
                 </div>
               ))}
             </div>
 
-            {/* Non-billable top 3 */}
-            {showDetail && nbCats.length > 0 && (
-              <div className="border-t border-slate-100 pt-3">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Top Non-Billable</p>
-                <div className="space-y-1.5">
-                  {nbCats.map((cat, j) => (
-                    <div key={j} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: NB_COLORS[j] }}></div>
-                        <span className="text-xs font-bold text-slate-500">{cat.label}</span>
+            {/* Non-Billable Top 3 */}
+            {showDetail && nbTop.length > 0 && (
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 8px' }}>Top Non-Billable</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {nbTop.map((cat, j) => (
+                    <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: NB_COLORS[j], flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>{cat.label}</span>
                       </div>
-                      <span className="text-xs font-black text-slate-700">{cat.value.toFixed(1)}h</span>
+                      <span className="font-data" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-1)' }}>{cat.value.toFixed(1)}h</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Org leader (managers view) */}
+            {/* Org Leader */}
             {!showDetail && item.orgLeader && item.orgLeader !== 'N/A' && (
-              <div className="border-t border-slate-100 pt-3 flex items-center gap-2">
-                <Briefcase size={12} className="text-slate-400 shrink-0" />
-                <p className="text-xs text-slate-400 font-bold truncate">{item.orgLeader}</p>
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Briefcase size={11} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
+                <p style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.orgLeader}</p>
               </div>
             )}
           </div>
@@ -639,54 +727,22 @@ const GroupedView = ({ data, groupKey, showDetail = false }) => {
   );
 };
 
-// ─── SHARED COMPONENTS ────────────────────────────────────────────────────────
-const statColorMap = {
-  blue:    { bg: 'bg-blue-500/10',    text: 'text-blue-600'    },
-  emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-600' },
-  indigo:  { bg: 'bg-indigo-500/10',  text: 'text-indigo-600'  },
-  amber:   { bg: 'bg-amber-500/10',   text: 'text-amber-600'   },
-  cyan:    { bg: 'bg-cyan-500/10',    text: 'text-cyan-600'    },
-  slate:   { bg: 'bg-slate-500/10',   text: 'text-slate-600'   },
-};
-
-const StatCard = ({ title, value, icon, color }) => {
-  const c = statColorMap[color] || statColorMap.blue;
-  return (
-    <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-slate-100 flex flex-col justify-between group hover:shadow-xl hover:shadow-blue-500/5 transition-all">
-      <div className={`w-10 h-10 rounded-xl ${c.bg} ${c.text} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
-        {icon}
-      </div>
-      <div>
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-0.5">{title}</p>
-        <h4 className="text-2xl font-black text-slate-800 leading-none">{value}</h4>
-      </div>
-    </div>
-  );
-};
-
-const LegendItem = ({ label, value, color }) => (
-  <div className="flex items-center justify-between">
-    <div className="flex items-center gap-2">
-      <div className={`w-2.5 h-2.5 rounded-full ${color}`}></div>
-      <span className="text-xs font-bold text-slate-500">{label}</span>
-    </div>
-    <span className="text-xs font-black text-slate-800">{value.toFixed(1)}h</span>
-  </div>
-);
-
+// ─── EMPTY STATE ──────────────────────────────────────────────────────────────
 const EmptyState = () => (
-  <div className="flex flex-col items-center justify-center py-32 text-slate-400 animate-in fade-in">
-    <AlertCircle size={56} className="mb-5 opacity-20" />
-    <h3 className="text-xl font-bold text-slate-600 mb-2">No data to display</h3>
-    <p className="text-sm max-w-md text-center">No records match the selected filters.</p>
+  <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', color: 'var(--text-3)' }}>
+    <div style={{ width: 56, height: 56, borderRadius: 16, background: '#F0EEE9', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+      <AlertCircle size={24} style={{ opacity: 0.4 }} />
+    </div>
+    <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-2)', margin: '0 0 6px', letterSpacing: '-0.02em' }}>No data to display</h3>
+    <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>No records match the selected filters.</p>
   </div>
 );
 
 // ─── UPLOAD VIEW ──────────────────────────────────────────────────────────────
 const UploadView = ({ setActiveTab }) => {
-  const [file, setFile] = useState(null);
+  const [file, setFile]             = useState(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [status, setStatus] = useState(null);
+  const [status, setStatus]         = useState(null);
   const [uploadMonth, setUploadMonth] = useState(new Date().toISOString().slice(0, 7));
 
   const processFile = async () => {
@@ -698,147 +754,109 @@ const UploadView = ({ setActiveTab }) => {
     reader.onload = (e) => {
       setTimeout(async () => {
         try {
-          const data = new Uint8Array(e.target.result);
-          const wbInfo = XLSX.read(data, { type: 'array', bookSheets: true });
-
-          const targetSheets = ['individualutilization', 'nonbillableteam'];
-          const sheetsToScan = wbInfo.SheetNames.filter(s => {
-            const clean = s.toLowerCase().replace(/[^a-z]/g, '');
-            return targetSheets.some(t => clean.includes(t));
+          const data    = new Uint8Array(e.target.result);
+          const wbInfo  = XLSX.read(data, { type: 'array', bookSheets: true });
+          const targets = ['individualutilization', 'nonbillableteam'];
+          const sheets  = wbInfo.SheetNames.filter(s => {
+            const c = s.toLowerCase().replace(/[^a-z]/g, '');
+            return targets.some(t => c.includes(t));
           });
+          if (!sheets.length) throw new Error("Sheets 'Individual Utilization' or 'Non Billable Team' not found.");
 
-          if (!sheetsToScan.length) throw new Error("Sheets 'Individual Utilization' or 'Non Billable Team' not found.");
-
-          const workbook = XLSX.read(data, {
-            type: 'array', sheets: sheetsToScan, sheetRows: 2500,
-            cellFormula: false, cellHTML: false, cellText: false, cellStyles: false
-          });
-
+          const workbook = XLSX.read(data, { type: 'array', sheets, sheetRows: 2500, cellFormula: false, cellHTML: false, cellText: false, cellStyles: false });
           let totalProcessed = 0, batchCount = 0;
           const batches = [];
           let currentBatch = writeBatch(db);
 
-          for (const sheetName of sheetsToScan) {
-            const jsonAoa = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
-              header: 1, blankrows: false, defval: null
-            });
-
-            const headerRowIndex = jsonAoa.findIndex(row => {
+          for (const sheetName of sheets) {
+            const aoa = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, blankrows: false, defval: null });
+            const hi  = aoa.findIndex(row => {
               if (!Array.isArray(row)) return false;
               const s = row.map(c => String(c || '').toLowerCase().replace(/[^a-z]/g, '')).join('||');
               return s.includes('employeename') && s.includes('managername');
             });
+            if (hi === -1) continue;
 
-            if (headerRowIndex === -1) continue;
+            const hc   = aoa[hi].map(h => String(h || '').toLowerCase().replace(/[^a-z]/g, ''));
+            const rows = aoa.slice(hi + 1);
+            const idx  = (names) => { for (const n of names) { const i = hc.indexOf(n); if (i !== -1) return i; } return -1; };
 
-            const headersClean = jsonAoa[headerRowIndex].map(h => String(h || '').toLowerCase().replace(/[^a-z]/g, ''));
-            const rows = jsonAoa.slice(headerRowIndex + 1);
+            const iEmp    = idx(['employeename','ownername']);
+            const iMan    = idx(['managername','ownermanager']);
+            const iBill   = idx(['billablehours','billable']);
+            const iNon    = idx(['totalnonbillhours','nonbillable','nonbill']);
+            const iTotal  = idx(['totalhoursentered','hoursnumber','totalworkinghours']);
+            const iAvail  = idx(['totalavailablehoursdenominator','totalavailablehours']);
+            const iTgt    = idx(['targetbillablehours','target']);
+            const iReg    = idx(['businessregion','region']);
+            const iOrg    = idx(['psorganizationalleader','organizationalleader']);
+            const iWCat   = idx(['workercategory','workercategorysubtype']);
+            const iDept   = idx(['department']);
+            const iUtilP  = idx(['utilizationtarget']);
+            const iElig   = idx(['eligibleworkdays']);
+            const iNbPI   = idx(['nonbillableproductissues']);
+            const iNbMig  = idx(['nonbillablemigrationupgrade']);
+            const iNbCS   = idx(['nonprojectcustomersupport']);
+            const iNbPD   = idx(['productdevelopmentsupport']);
+            const iNbSI   = idx(['sovosinternal']);
+            const iNbSS   = idx(['salesscopingsupport','salesscoping']);
+            const iNbMkt  = idx(['marketingevents','marketing']);
+            const iNbTr   = idx(['traininginternal','training']);
+            const iNbTO   = idx(['traineronboarding','trainer']);
+            const iNbTOff = idx(['timeoff']);
+            const iNbLv   = idx(['leave']);
 
-            const getIdx = (names) => {
-              for (const n of names) { const i = headersClean.indexOf(n); if (i !== -1) return i; }
-              return -1;
-            };
-
-            // Core fields
-            const idxEmp       = getIdx(['employeename', 'ownername']);
-            const idxMan       = getIdx(['managername', 'ownermanager']);
-            const idxBill      = getIdx(['billablehours', 'billable']);
-            const idxNon       = getIdx(['totalnonbillhours', 'nonbillable', 'nonbill']);
-            const idxTotal     = getIdx(['totalhoursentered', 'hoursnumber', 'totalworkinghours']);
-            const idxAvail     = getIdx(['totalavailablehoursdenominator', 'totalavailablehours']);
-            const idxTarget    = getIdx(['targetbillablehours', 'target']);
-            // New fields
-            const idxRegion    = getIdx(['businessregion', 'region']);
-            const idxOrgLeader = getIdx(['psorganizationalleader', 'organizationalleader']);
-            const idxWorkerCat = getIdx(['workercategory', 'workercategorysubtype']);
-            const idxDept      = getIdx(['department']);
-            const idxUtilPct   = getIdx(['utilizationtarget']);
-            const idxEligible  = getIdx(['eligibleworkdays']);
-            // Non-billable breakdown
-            const idxNbProductIssues = getIdx(['nonbillableproductissues']);
-            const idxNbMigration     = getIdx(['nonbillablemigrationupgrade']);
-            const idxNbCustSupport   = getIdx(['nonprojectcustomersupport']);
-            const idxNbProductDev    = getIdx(['productdevelopmentsupport']);
-            const idxNbSovosInt      = getIdx(['sovosinternal']);
-            const idxNbSales         = getIdx(['salesscopingsupport', 'salesscoping']);
-            const idxNbMarketing     = getIdx(['marketingevents', 'marketing']);
-            const idxNbTraining      = getIdx(['traininginternal', 'training']);
-            const idxNbTrainer       = getIdx(['traineronboarding', 'trainer']);
-            const idxNbTimeOff       = getIdx(['timeoff']);
-            const idxNbLeave         = getIdx(['leave']);
-
-            if (idxEmp === -1 || idxMan === -1) continue;
+            if (iEmp === -1 || iMan === -1) continue;
 
             setStatus({ type: 'info', text: `Removing previous data for ${uploadMonth}...` });
-            const snapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'ps_entries_v2'));
-            const toDelete = snapshot.docs.filter(d => d.data().month === uploadMonth);
-
-            if (toDelete.length > 0) {
-              let delBatch = writeBatch(db), delCount = 0;
-              for (const d of toDelete) {
-                delBatch.delete(d.ref);
-                if (++delCount === 450) { await delBatch.commit(); delBatch = writeBatch(db); delCount = 0; }
-              }
-              if (delCount > 0) await delBatch.commit();
+            const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'ps_entries_v2'));
+            const toDel = snap.docs.filter(d => d.data().month === uploadMonth);
+            if (toDel.length > 0) {
+              let db2 = writeBatch(db), dc = 0;
+              for (const d of toDel) { db2.delete(d.ref); if (++dc === 450) { await db2.commit(); db2 = writeBatch(db); dc = 0; } }
+              if (dc > 0) await db2.commit();
             }
 
             setStatus({ type: 'info', text: 'Processing rows...' });
-
-            const parseNum = (val) => {
-              if (!val) return 0;
-              let v = String(val).replace(/[^0-9.,-]/g, '');
-              if (v.includes(',')) v = v.replace(',', '.');
-              return parseFloat(v) || 0;
-            };
+            const pn = (v) => { if (!v) return 0; let s = String(v).replace(/[^0-9.,-]/g,''); if (s.includes(',')) s = s.replace(',','.'); return parseFloat(s)||0; };
 
             for (const row of rows) {
               if (!Array.isArray(row)) continue;
-              const empName = String(row[idxEmp] || '').trim();
-              if (!empName || empName.toLowerCase().includes('employee name') || empName === 'N/A') continue;
-
-              const billable    = parseNum(row[idxBill]);
-              const nonBillable = parseNum(row[idxNon]);
-              let total         = parseNum(row[idxTotal]);
-              let available     = idxAvail   !== -1 ? parseNum(row[idxAvail])   : 0;
-              const target      = idxTarget  !== -1 ? parseNum(row[idxTarget])  : 0;
-
-              if (total === 0)     total     = billable + nonBillable;
-              if (available === 0) available = total > 0 ? total : 160;
-
-              if (total === 0 && available === 0) continue;
+              const emp = String(row[iEmp]||'').trim();
+              if (!emp || emp.toLowerCase().includes('employee name') || emp === 'N/A') continue;
+              const bill = pn(row[iBill]), nonb = pn(row[iNon]);
+              let total  = pn(row[iTotal]), avail = iAvail !== -1 ? pn(row[iAvail]) : 0;
+              if (total === 0) total = bill + nonb;
+              if (avail === 0) avail = total > 0 ? total : 160;
+              if (total === 0 && avail === 0) continue;
 
               const entry = {
-                employee:        empName,
-                manager:         String(row[idxMan]       || '').trim() || 'N/A',
-                region:          idxRegion    !== -1 ? String(row[idxRegion]    || '').trim() || 'N/A' : 'N/A',
-                orgLeader:       idxOrgLeader !== -1 ? String(row[idxOrgLeader] || '').trim() || 'N/A' : 'N/A',
-                workerCategory:  idxWorkerCat !== -1 ? String(row[idxWorkerCat] || '').trim() || ''    : '',
-                department:      idxDept      !== -1 ? String(row[idxDept]      || '').trim() || ''    : '',
-                utilizationTargetPct: idxUtilPct  !== -1 ? parseNum(row[idxUtilPct])  : 0,
-                eligibleWorkDays:     idxEligible !== -1 ? parseNum(row[idxEligible]) : 0,
-                billableHours:   billable,
-                nonBillableHours: nonBillable,
-                hours:           total,
-                availableHours:  available,
-                targetHours:     target,
-                // Non-billable breakdown
-                nbProductIssues:     idxNbProductIssues !== -1 ? parseNum(row[idxNbProductIssues]) : 0,
-                nbMigration:         idxNbMigration     !== -1 ? parseNum(row[idxNbMigration])     : 0,
-                nbCustomerSupport:   idxNbCustSupport   !== -1 ? parseNum(row[idxNbCustSupport])   : 0,
-                nbProductDev:        idxNbProductDev    !== -1 ? parseNum(row[idxNbProductDev])    : 0,
-                nbSovosInternal:     idxNbSovosInt      !== -1 ? parseNum(row[idxNbSovosInt])      : 0,
-                nbSalesScoping:      idxNbSales         !== -1 ? parseNum(row[idxNbSales])         : 0,
-                nbMarketing:         idxNbMarketing     !== -1 ? parseNum(row[idxNbMarketing])     : 0,
-                nbTraining:          idxNbTraining      !== -1 ? parseNum(row[idxNbTraining])      : 0,
-                nbTrainerOnboarding: idxNbTrainer       !== -1 ? parseNum(row[idxNbTrainer])       : 0,
-                nbTimeOff:           idxNbTimeOff       !== -1 ? parseNum(row[idxNbTimeOff])       : 0,
-                nbLeave:             idxNbLeave         !== -1 ? parseNum(row[idxNbLeave])         : 0,
-                month:     uploadMonth,
-                timestamp: Date.now(),
+                employee:        emp,
+                manager:         String(row[iMan]||'').trim()||'N/A',
+                region:          iReg  !== -1 ? String(row[iReg] ||'').trim()||'N/A' : 'N/A',
+                orgLeader:       iOrg  !== -1 ? String(row[iOrg] ||'').trim()||'N/A' : 'N/A',
+                workerCategory:  iWCat !== -1 ? String(row[iWCat]||'').trim()||''    : '',
+                department:      iDept !== -1 ? String(row[iDept]||'').trim()||''    : '',
+                utilizationTargetPct: iUtilP !== -1 ? pn(row[iUtilP]) : 0,
+                eligibleWorkDays:     iElig  !== -1 ? pn(row[iElig])  : 0,
+                billableHours:   bill, nonBillableHours: nonb, hours: total, availableHours: avail,
+                targetHours:     iTgt !== -1 ? pn(row[iTgt]) : 0,
+                nbProductIssues:     iNbPI  !== -1 ? pn(row[iNbPI])  : 0,
+                nbMigration:         iNbMig !== -1 ? pn(row[iNbMig]) : 0,
+                nbCustomerSupport:   iNbCS  !== -1 ? pn(row[iNbCS])  : 0,
+                nbProductDev:        iNbPD  !== -1 ? pn(row[iNbPD])  : 0,
+                nbSovosInternal:     iNbSI  !== -1 ? pn(row[iNbSI])  : 0,
+                nbSalesScoping:      iNbSS  !== -1 ? pn(row[iNbSS])  : 0,
+                nbMarketing:         iNbMkt !== -1 ? pn(row[iNbMkt]) : 0,
+                nbTraining:          iNbTr  !== -1 ? pn(row[iNbTr])  : 0,
+                nbTrainerOnboarding: iNbTO  !== -1 ? pn(row[iNbTO])  : 0,
+                nbTimeOff:           iNbTOff!== -1 ? pn(row[iNbTOff]): 0,
+                nbLeave:             iNbLv  !== -1 ? pn(row[iNbLv])  : 0,
+                month: uploadMonth, timestamp: Date.now(),
               };
 
-              const cleanId = empName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-              const docRef  = doc(db, 'artifacts', appId, 'public', 'data', 'ps_entries_v2', `${uploadMonth}_${cleanId}`);
+              const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'ps_entries_v2',
+                `${uploadMonth}_${emp.replace(/[^a-zA-Z0-9]/g,'').toLowerCase()}`);
               currentBatch.set(docRef, entry);
               totalProcessed++;
               if (++batchCount === 450) { batches.push(currentBatch.commit()); currentBatch = writeBatch(db); batchCount = 0; }
@@ -848,11 +866,9 @@ const UploadView = ({ setActiveTab }) => {
 
           if (totalProcessed === 0) throw new Error('No valid records found. Check the Excel file.');
           if (batchCount > 0) batches.push(currentBatch.commit());
-
           setStatus({ type: 'info', text: 'Uploading to Firebase...' });
           await Promise.all(batches);
-
-          setStatus({ type: 'success', text: `Done! ${totalProcessed} records uploaded. Redirecting...` });
+          setStatus({ type: 'success', text: `Done! ${totalProcessed} records uploaded.` });
           setFile(null);
           setTimeout(() => setActiveTab('dashboard'), 1500);
 
@@ -868,43 +884,69 @@ const UploadView = ({ setActiveTab }) => {
   };
 
   return (
-    <div className="max-w-xl mx-auto py-12 animate-in fade-in">
-      <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 flex flex-col items-center relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-8 opacity-5 text-blue-600 rotate-12"><FileSpreadsheet size={100} /></div>
-
-        <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mb-6 shadow-inner">
-          <Upload size={32} />
+    <div className="animate-in" style={{ maxWidth: 480, margin: '40px auto' }}>
+      <div style={{
+        background: 'var(--bg-card)', borderRadius: 24,
+        border: '1px solid var(--border)',
+        padding: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center',
+        position: 'relative', overflow: 'hidden',
+      }}>
+        <div style={{ position: 'absolute', top: -20, right: -20, opacity: 0.04 }}>
+          <FileSpreadsheet size={160} />
         </div>
 
-        <h3 className="text-2xl font-black text-slate-800 text-center mb-5">Update Data</h3>
-
-        <div className="w-full flex flex-col items-center bg-slate-50 p-5 rounded-2xl border border-slate-100 mb-6">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Report Month</label>
-          <input type="month" value={uploadMonth} onChange={e => setUploadMonth(e.target.value)}
-            className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold focus:ring-2 focus:ring-blue-500 outline-none w-full max-w-[200px] text-center shadow-sm" />
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+          <Upload size={26} style={{ color: 'var(--accent)' }} />
         </div>
 
-        <input type="file" accept=".xlsx,.xls,.csv" id="excel-file" className="hidden" onChange={e => setFile(e.target.files[0])} />
-        <label htmlFor="excel-file" className="w-full flex items-center justify-center gap-3 px-8 py-5 bg-white border-2 border-dashed border-slate-300 rounded-[1.5rem] cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-all font-bold text-slate-600 group">
-          {file ? <CheckCircle2 className="text-emerald-500" /> : <Search size={20} className="text-slate-300 group-hover:text-blue-500" />}
-          {file ? file.name : 'Select Excel File'}
+        <h3 style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text-1)', margin: '0 0 24px', textAlign: 'center' }}>Update Data</h3>
+
+        <div style={{ width: '100%', background: '#F8F7F4', borderRadius: 12, padding: '16px', marginBottom: 20, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>Report Month</label>
+          <input type="month" value={uploadMonth} onChange={e => setUploadMonth(e.target.value)} style={{
+            fontFamily: 'Syne, sans-serif', fontSize: 14, fontWeight: 700,
+            color: 'var(--text-1)', background: '#fff',
+            border: '1px solid var(--border)', borderRadius: 8,
+            padding: '8px 14px', outline: 'none', width: '100%', maxWidth: 200, textAlign: 'center',
+          }} />
+        </div>
+
+        <input type="file" accept=".xlsx,.xls,.csv" id="excel-file" style={{ display: 'none' }} onChange={e => setFile(e.target.files[0])} />
+        <label htmlFor="excel-file" style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+          padding: '16px', background: '#fff',
+          border: `2px dashed ${file ? 'var(--accent)' : 'var(--border)'}`,
+          borderRadius: 12, cursor: 'pointer', fontWeight: 700, fontSize: 13,
+          color: file ? 'var(--accent)' : 'var(--text-3)',
+          transition: 'all 0.2s', fontFamily: 'Syne, sans-serif',
+        }}>
+          {file ? <CheckCircle2 size={18} /> : <Search size={18} />}
+          {file ? file.name : 'Select Excel File (.xlsx)'}
         </label>
 
         {file && (
-          <button onClick={processFile} disabled={isUploading}
-            className="mt-6 w-full py-4 bg-[#0F172A] text-white rounded-[1.5rem] font-black shadow-2xl hover:bg-blue-600 transition-all flex items-center justify-center gap-3">
-            {isUploading ? <Loader2 className="animate-spin" /> : <TrendingUp size={20} />}
+          <button onClick={processFile} disabled={isUploading} style={{
+            marginTop: 16, width: '100%', padding: '14px',
+            background: isUploading ? '#F0EEE9' : '#0A0A0A',
+            color: isUploading ? 'var(--text-3)' : '#fff',
+            borderRadius: 12, border: 'none', cursor: isUploading ? 'not-allowed' : 'pointer',
+            fontSize: 13, fontWeight: 800, fontFamily: 'Syne, sans-serif', letterSpacing: '-0.01em',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s',
+          }}>
+            {isUploading ? <Loader2 size={16} className="animate-spin" /> : <TrendingUp size={16} />}
             {isUploading ? 'Processing...' : 'Process and Synchronize'}
           </button>
         )}
 
         {status && (
-          <div className={`mt-6 w-full p-4 rounded-2xl flex items-center gap-3 animate-in fade-in ${
-            status.type === 'success' ? 'bg-emerald-50 text-emerald-700' :
-            status.type === 'error'   ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'
-          }`}>
-            <AlertCircle size={16} className="shrink-0" />
-            <p className="text-xs font-black uppercase tracking-wide">{status.text}</p>
+          <div className="animate-in" style={{
+            marginTop: 16, width: '100%', padding: '12px 14px',
+            borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10,
+            background: status.type === 'success' ? '#ECFDF5' : status.type === 'error' ? '#FEF2F2' : '#EFF6FF',
+            border: `1px solid ${status.type === 'success' ? '#A7F3D0' : status.type === 'error' ? '#FECACA' : '#BFDBFE'}`,
+          }}>
+            <AlertCircle size={14} style={{ color: status.type === 'success' ? '#059669' : status.type === 'error' ? '#DC2626' : '#2563EB', flexShrink: 0 }} />
+            <p style={{ fontSize: 11, fontWeight: 700, color: status.type === 'success' ? '#065F46' : status.type === 'error' ? '#991B1B' : '#1E40AF', margin: 0 }}>{status.text}</p>
           </div>
         )}
       </div>
