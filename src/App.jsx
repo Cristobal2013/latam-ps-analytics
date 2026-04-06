@@ -1213,7 +1213,10 @@ const ProjectsOverview = ({ data }) => {
 
         {/* Health pie */}
         <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: '22px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-2)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>Health Mix</div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-2)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Health Mix</div>
+            <span style={{ fontSize: 8, fontWeight: 600, color: '#6B7280', background: '#F3F4F6', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px', letterSpacing: '0.04em' }}>From Salesforce</span>
+          </div>
           <ResponsiveContainer width="100%" height={130}>
             <PieChart>
               <Pie data={healthPieData} cx="50%" cy="50%" innerRadius={38} outerRadius={56} dataKey="value" paddingAngle={3}>
@@ -1245,22 +1248,24 @@ const ProjectsOverview = ({ data }) => {
         {/* Table header */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '20px 80px minmax(0,1fr) 130px 100px minmax(0,1fr) 90px 90px',
-          gap: 12, padding: '8px 20px',
+          gridTemplateColumns: '20px 80px minmax(0,1fr) 120px 90px minmax(0,1fr) 90px 110px 90px',
+          gap: 10, padding: '8px 20px',
           background: '#F8F7F4', borderBottom: '1px solid var(--border)',
         }}>
-          {['', 'ID', 'Account / Project', 'Phase', 'State', 'Owner', 'Go Live', 'Value (USD)'].map(h => (
+          {['', 'ID', 'Account / Project', 'Phase', 'State', 'Owner', 'Go Live', 'Hrs Rem. / Budget', 'Value (USD)'].map(h => (
             <span key={h} style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{h}</span>
           ))}
         </div>
         <div style={{ maxHeight: 500, overflowY: 'auto' }}>
           {filtered.length === 0 ? (
             <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-3)', fontSize: 13, fontWeight: 600 }}>No projects match the filters</div>
-          ) : filtered.slice(0, 250).map((p, i) => (
+          ) : filtered.slice(0, 250).map((p, i) => {
+            const pctHrs = p.budgetedHours > 0 ? (p.contractedHoursRem / p.budgetedHours) * 100 : null;
+            return (
             <div key={p.id} style={{
               display: 'grid',
-              gridTemplateColumns: '20px 80px minmax(0,1fr) 130px 100px minmax(0,1fr) 90px 90px',
-              gap: 12, padding: '10px 20px', alignItems: 'center',
+              gridTemplateColumns: '20px 80px minmax(0,1fr) 120px 90px minmax(0,1fr) 90px 110px 90px',
+              gap: 10, padding: '10px 20px', alignItems: 'center',
               borderBottom: i < filtered.length - 1 ? '1px solid var(--border)' : 'none',
               transition: 'background 0.1s',
             }}
@@ -1279,20 +1284,11 @@ const ProjectsOverview = ({ data }) => {
               {/* Phase */}
               <div>
                 {p.currentPhase ? (
-                  <span style={{
-                    fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
-                    background: `${PHASE_COLOR[p.currentPhase] || '#6B7280'}18`,
-                    color: PHASE_COLOR[p.currentPhase] || '#6B7280',
-                    letterSpacing: '0.04em',
-                  }}>{p.currentPhase}</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: `${PHASE_COLOR[p.currentPhase] || '#6B7280'}18`, color: PHASE_COLOR[p.currentPhase] || '#6B7280', letterSpacing: '0.04em' }}>{p.currentPhase}</span>
                 ) : <span style={{ fontSize: 10, color: 'var(--text-3)' }}>—</span>}
               </div>
               {/* State */}
-              <span style={{
-                fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
-                background: p.projectState === 'Active' ? 'rgba(0,212,168,0.1)' : 'rgba(251,146,60,0.12)',
-                color: p.projectState === 'Active' ? '#00D4A8' : '#FB923C',
-              }}>{p.projectState || '—'}</span>
+              <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: p.projectState === 'Active' ? 'rgba(0,212,168,0.1)' : 'rgba(251,146,60,0.12)', color: p.projectState === 'Active' ? '#00D4A8' : '#FB923C' }}>{p.projectState || '—'}</span>
               {/* Owner */}
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 11, color: 'var(--text-2)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.projectOwner || '—'}</div>
@@ -1300,12 +1296,26 @@ const ProjectsOverview = ({ data }) => {
               </div>
               {/* Target Go Live */}
               <span className="font-data" style={{ fontSize: 10, color: 'var(--text-3)' }}>{p.targetGoLiveDate || '—'}</span>
+              {/* Hours remaining / budgeted */}
+              <div>
+                {p.budgetedHours > 0 ? (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, marginBottom: 3 }}>
+                      <span className="font-data" style={{ fontSize: 11, fontWeight: 700, color: pctHrs !== null && pctHrs < 20 ? '#F87171' : 'var(--text-1)' }}>{(p.contractedHoursRem || 0).toLocaleString()}</span>
+                      <span style={{ fontSize: 9, color: 'var(--text-3)' }}>{`/ ${p.budgetedHours.toLocaleString()}`}</span>
+                    </div>
+                    <div style={{ height: 3, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${Math.min(pctHrs || 0, 100)}%`, background: pctHrs > 50 ? '#00D4A8' : pctHrs > 20 ? '#FFB800' : '#F87171', borderRadius: 3 }} />
+                    </div>
+                  </>
+                ) : <span style={{ fontSize: 10, color: 'var(--text-3)' }}>—</span>}
+              </div>
               {/* Booking Value */}
               <span className="font-data" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-1)' }}>
                 {p.bookingValue ? `$${p.bookingValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}
               </span>
             </div>
-          ))}
+          );})}
         </div>
       </div>
     </div>
@@ -1467,17 +1477,19 @@ const ProjectsByManagerView = ({ data }) => {
                 <div>
                   {/* Sub-header */}
                   <div style={{
-                    display: 'grid', gridTemplateColumns: '20px 80px minmax(0,1fr) 130px 100px minmax(0,1fr) 90px 90px',
-                    gap: 12, padding: '7px 20px', background: '#FAFAF8',
+                    display: 'grid', gridTemplateColumns: '20px 80px minmax(0,1fr) 120px 90px minmax(0,1fr) 90px 110px 90px',
+                    gap: 10, padding: '7px 20px', background: '#FAFAF8',
                   }}>
-                    {['', 'ID', 'Account / Project', 'Phase', 'State', 'Owner', 'Go Live', 'Value'].map(h => (
+                    {['', 'ID', 'Account / Project', 'Phase', 'State', 'Owner', 'Go Live', 'Hrs Rem. / Budget', 'Value'].map(h => (
                       <span key={h} style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{h}</span>
                     ))}
                   </div>
-                  {g.projects.map((p, i) => (
+                  {g.projects.map((p, i) => {
+                    const pctHrs = p.budgetedHours > 0 ? (p.contractedHoursRem / p.budgetedHours) * 100 : null;
+                    return (
                     <div key={p.id} style={{
-                      display: 'grid', gridTemplateColumns: '20px 80px minmax(0,1fr) 130px 100px minmax(0,1fr) 90px 90px',
-                      gap: 12, padding: '9px 20px', alignItems: 'center',
+                      display: 'grid', gridTemplateColumns: '20px 80px minmax(0,1fr) 120px 90px minmax(0,1fr) 90px 110px 90px',
+                      gap: 10, padding: '9px 20px', alignItems: 'center',
                       borderTop: '1px solid var(--border)', transition: 'background 0.1s',
                     }}
                       onMouseEnter={e => e.currentTarget.style.background = '#F8F7F4'}
@@ -1499,11 +1511,25 @@ const ProjectsByManagerView = ({ data }) => {
                         <div style={{ fontSize: 11, color: 'var(--text-2)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.projectOwner || '—'}</div>
                       </div>
                       <span className="font-data" style={{ fontSize: 10, color: 'var(--text-3)' }}>{p.targetGoLiveDate || '—'}</span>
+                      {/* Hours remaining / budgeted */}
+                      <div>
+                        {p.budgetedHours > 0 ? (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, marginBottom: 3 }}>
+                              <span className="font-data" style={{ fontSize: 11, fontWeight: 700, color: pctHrs !== null && pctHrs < 20 ? '#F87171' : 'var(--text-1)' }}>{(p.contractedHoursRem || 0).toLocaleString()}</span>
+                              <span style={{ fontSize: 9, color: 'var(--text-3)' }}>{`/ ${p.budgetedHours.toLocaleString()}`}</span>
+                            </div>
+                            <div style={{ height: 3, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${Math.min(pctHrs || 0, 100)}%`, background: pctHrs > 50 ? '#00D4A8' : pctHrs > 20 ? '#FFB800' : '#F87171', borderRadius: 3 }} />
+                            </div>
+                          </>
+                        ) : <span style={{ fontSize: 10, color: 'var(--text-3)' }}>—</span>}
+                      </div>
                       <span className="font-data" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-1)' }}>
                         {p.bookingValue ? `$${p.bookingValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}
                       </span>
                     </div>
-                  ))}
+                  );})}
                 </div>
               )}
             </div>
