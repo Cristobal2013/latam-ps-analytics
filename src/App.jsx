@@ -1043,7 +1043,7 @@ const ProjectsOverview = ({ data }) => {
     if (filterState   !== 'All' && p.projectState        !== filterState)   return false;
     if (filterPhase   !== 'All' && p.currentPhase        !== filterPhase)   return false;
     if (filterProduct !== 'All' && p.productFamily       !== filterProduct) return false;
-    if (filterManager !== 'All' && p.projectOwner !== filterManager) return false;
+    if (filterManager !== 'All' && p.projectOwnerManager !== filterManager) return false;
     if (search) {
       const q = search.toLowerCase();
       if (!p.accountName?.toLowerCase().includes(q) &&
@@ -1078,7 +1078,7 @@ const ProjectsOverview = ({ data }) => {
   const allPhases    = useMemo(() => [...new Set(data.map(p => p.currentPhase).filter(Boolean))].sort(), [data]);
   const allProducts  = useMemo(() => [...new Set(data.map(p => p.productFamily).filter(Boolean))].sort(), [data]);
   const allStates    = useMemo(() => [...new Set(data.map(p => p.projectState).filter(Boolean))].sort(), [data]);
-  const allManagers  = useMemo(() => [...new Set(data.map(p => p.projectOwner).filter(Boolean))].sort(), [data]);
+  const allManagers  = useMemo(() => [...new Set(data.map(p => p.projectOwnerManager).filter(Boolean))].sort(), [data]);
 
   const phaseChartData = allPhases.map(ph => ({
     name: ph.length > 12 ? ph.slice(0, 12) + '…' : ph,
@@ -1342,7 +1342,7 @@ const ProjectsByManagerView = ({ data }) => {
       if (!p.accountName?.toLowerCase().includes(q) &&
           !p.projectName?.toLowerCase().includes(q)  &&
           !p.projectId?.toLowerCase().includes(q)    &&
-          !p.projectOwner?.toLowerCase().includes(q)) return false;
+          !p.projectOwnerManager?.toLowerCase().includes(q)) return false;
     }
     return true;
   }), [data, filterHealth, filterState, filterPhase, search]);
@@ -1351,7 +1351,7 @@ const ProjectsByManagerView = ({ data }) => {
   const groups = useMemo(() => {
     const map = {};
     for (const p of filtered) {
-      const mgr = p.projectOwner || 'Unassigned';
+      const mgr = p.projectOwnerManager || 'Unassigned';
       if (!map[mgr]) map[mgr] = [];
       map[mgr].push(p);
     }
