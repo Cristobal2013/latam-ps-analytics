@@ -1559,8 +1559,48 @@ const UploadProjectsView = ({ setActiveTab }) => {
           const workbook = XLSX.read(data, { type: 'array', sheetRows: 3000, cellFormula: false, cellHTML: false });
           const ws       = workbook.Sheets[workbook.SheetNames[0]];
           if (!ws) throw new Error('No sheet found in file.');
-          const aoa  = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-          const rows = aoa.slice(1).filter(r => Array.isArray(r) && r[0]);
+          const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+          if (aoa.length < 2) throw new Error('No data rows found.');
+
+          // Detect columns by header name (robust to column order changes)
+          const hc = aoa[0].map(h => String(h || '').toLowerCase().replace(/[^a-z0-9]/g, ''));
+          const ci = (...names) => { for (const n of names) { const i = hc.indexOf(n.toLowerCase().replace(/[^a-z0-9]/g, '')); if (i !== -1) return i; } return -1; };
+
+          const iId      = ci('projectid', 'project id');
+          const iAcct    = ci('accountname', 'account name');
+          const iSeg     = ci('accountsegment', 'account segment');
+          const iProjN   = ci('projectprojectname', 'project name');
+          const iDelReg  = ci('deliveryregion', 'delivery region');
+          const iRegion  = ci('region');
+          const iCountry = ci('country');
+          const iProdF   = ci('productfamily', 'product family');
+          const iSol     = ci('solution');
+          const iInteg   = ci('integrationtype', 'integration type');
+          const iState   = ci('projectstate', 'project state');
+          const iHoldR   = ci('onholdcancellationreason');
+          const iStart   = ci('projectstartdate', 'project start date');
+          const iEnd     = ci('projectenddate', 'project end date');
+          const iTGL     = ci('targetgolivedate', 'target go live date');
+          const iFGL     = ci('finalgolivedate', 'final go live date');
+          const iBV      = ci('bookingvalueconverted', 'booking value converted');
+          const iBH      = ci('budgetedhours', 'budgeted hours');
+          const iCHR     = ci('contractedhoursremaining', 'contracted hours remaining');
+          const iBillT   = ci('billingtype', 'billing type');
+          const iPSOT    = ci('psordertype', 'ps order type');
+          const iEsc     = ci('isprojectescalated', 'is project escalated');
+          const iBizM    = ci('businessmarket', 'business market');
+          const iSC      = ci('solutionsconsultantresource', 'solutions consultant resource');
+          const iTech    = ci('technicalresource', 'technical resource');
+          const iHealth  = ci('health');
+          const iHIssue  = ci('healthissue', 'health issue');
+          const iUtilC   = ci('utilizationcategory', 'utilization category');
+          const iOwnMgr  = ci('projectownermanagername', 'project owner manager name');
+          const iOwner   = ci('projectowner', 'project owner');
+          const iPhase   = ci('currentphase', 'current phase');
+
+          if (iId === -1) throw new Error('Column "Project ID" not found. Check the file format.');
+
+          const rows = aoa.slice(1).filter(r => Array.isArray(r) && r[iId]);
           if (!rows.length) throw new Error('No data rows found.');
 
           setStatus({ type: 'info', text: `Processing ${rows.length} projects…` });
@@ -1577,43 +1617,48 @@ const UploadProjectsView = ({ setActiveTab }) => {
             if (dc > 0) await bDel.commit();
           }
 
+          const str = (i) => i !== -1 ? String(rows[0][i] || '').constructor === String ? '' : '' : ''; // just a helper ref
+          const sv  = (row, i) => i !== -1 ? String(row[i] || '').trim() : '';
+          const nv  = (row, i) => i !== -1 && typeof row[i] === 'number' ? row[i] : 0;
+          const dv  = (row, i) => i !== -1 ? excelDateToStr(row[i]) : null;
+
           // Write new
           let batch = writeBatch(db), bc = 0, total = 0;
           for (const row of rows) {
-            const pid = String(row[0] || '').trim();
+            const pid = sv(row, iId);
             if (!pid) continue;
             const entry = {
               projectId:           pid,
-              accountName:         String(row[1]  || '').trim(),
-              accountSegment:      String(row[2]  || '').trim(),
-              projectName:         String(row[3]  || '').trim(),
-              deliveryRegion:      String(row[4]  || '').trim(),
-              region:              String(row[5]  || '').trim(),
-              country:             String(row[6]  || '').trim(),
-              productFamily:       String(row[7]  || '').trim(),
-              solution:            String(row[8]  || '').trim(),
-              integrationType:     String(row[9]  || '').trim(),
-              projectState:        String(row[12] || '').trim(),
-              onHoldReason:        String(row[13] || '').trim(),
-              startDate:           excelDateToStr(row[14]),
-              endDate:             excelDateToStr(row[15]),
-              targetGoLiveDate:    excelDateToStr(row[16]),
-              finalGoLiveDate:     excelDateToStr(row[17]),
-              bookingValue:        typeof row[19] === 'number' ? row[19] : 0,
-              budgetedHours:       typeof row[22] === 'number' ? row[22] : 0,
-              contractedHoursRem:  typeof row[23] === 'number' ? row[23] : 0,
-              billingType:         String(row[24] || '').trim(),
-              psOrderType:         String(row[25] || '').trim(),
-              isEscalated:         row[27] === 1 || row[27] === true,
-              businessMarket:      String(row[28] || '').trim(),
-              solutionsConsultant: String(row[29] || '').trim(),
-              technicalResource:   String(row[30] || '').trim(),
-              health:              String(row[33] || '').trim(),
-              healthIssue:         String(row[34] || '').trim(),
-              utilizationCategory: String(row[35] || '').trim(),
-              projectOwnerManager: String(row[41] || '').trim(),
-              projectOwner:        String(row[42] || '').trim(),
-              currentPhase:        String(row[43] || '').trim() || null,
+              accountName:         sv(row, iAcct),
+              accountSegment:      sv(row, iSeg),
+              projectName:         sv(row, iProjN),
+              deliveryRegion:      sv(row, iDelReg),
+              region:              sv(row, iRegion),
+              country:             sv(row, iCountry),
+              productFamily:       sv(row, iProdF),
+              solution:            sv(row, iSol),
+              integrationType:     sv(row, iInteg),
+              projectState:        sv(row, iState),
+              onHoldReason:        sv(row, iHoldR),
+              startDate:           dv(row, iStart),
+              endDate:             dv(row, iEnd),
+              targetGoLiveDate:    dv(row, iTGL),
+              finalGoLiveDate:     dv(row, iFGL),
+              bookingValue:        nv(row, iBV),
+              budgetedHours:       nv(row, iBH),
+              contractedHoursRem:  nv(row, iCHR),
+              billingType:         sv(row, iBillT),
+              psOrderType:         sv(row, iPSOT),
+              isEscalated:         iEsc !== -1 && (row[iEsc] === 1 || row[iEsc] === true),
+              businessMarket:      sv(row, iBizM),
+              solutionsConsultant: sv(row, iSC),
+              technicalResource:   sv(row, iTech),
+              health:              sv(row, iHealth),
+              healthIssue:         sv(row, iHIssue),
+              utilizationCategory: sv(row, iUtilC),
+              projectOwnerManager: sv(row, iOwnMgr),
+              projectOwner:        sv(row, iOwner),
+              currentPhase:        sv(row, iPhase) || null,
               uploadedAt:          Date.now(),
             };
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'ps_projects_v1', pid);
