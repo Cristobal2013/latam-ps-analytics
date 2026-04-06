@@ -187,8 +187,9 @@ if (loading) return (
             ))
           ) : (
             [
-              { key: 'overview', icon: <LayoutDashboard size={15} />, label: 'Overview' },
-              { key: 'upload',   icon: <Upload size={15} />,          label: 'Upload Projects' },
+              { key: 'overview',   icon: <LayoutDashboard size={15} />, label: 'Overview' },
+              { key: 'bymanager', icon: <Users size={15} />,          label: 'By Manager' },
+              { key: 'upload',    icon: <Upload size={15} />,         label: 'Upload Projects' },
             ].map(item => (
               <button key={item.key} onClick={() => setActiveProjectTab(item.key)}
                 className={`nav-item ${activeProjectTab === item.key ? 'active' : ''}`}
@@ -266,8 +267,9 @@ if (loading) return (
               </>
             ) : (
               <>
-                {activeProjectTab === 'overview' && <ProjectsOverview data={projectsData} />}
-                {activeProjectTab === 'upload'   && <UploadProjectsView setActiveTab={setActiveProjectTab} />}
+                {activeProjectTab === 'overview'   && <ProjectsOverview data={projectsData} />}
+                {activeProjectTab === 'bymanager' && <ProjectsByManagerView data={projectsData} />}
+                {activeProjectTab === 'upload'    && <UploadProjectsView setActiveTab={setActiveProjectTab} />}
               </>
             )}
           </div>
@@ -1031,13 +1033,15 @@ const ProjectsOverview = ({ data }) => {
   const [filterState,   setFilterState]   = useState('All');
   const [filterPhase,   setFilterPhase]   = useState('All');
   const [filterProduct, setFilterProduct] = useState('All');
+  const [filterManager, setFilterManager] = useState('All');
   const [search,        setSearch]        = useState('');
 
   const filtered = useMemo(() => data.filter(p => {
-    if (filterHealth  !== 'All' && p.health        !== filterHealth)  return false;
-    if (filterState   !== 'All' && p.projectState  !== filterState)   return false;
-    if (filterPhase   !== 'All' && p.currentPhase  !== filterPhase)   return false;
-    if (filterProduct !== 'All' && p.productFamily !== filterProduct) return false;
+    if (filterHealth  !== 'All' && p.health              !== filterHealth)  return false;
+    if (filterState   !== 'All' && p.projectState        !== filterState)   return false;
+    if (filterPhase   !== 'All' && p.currentPhase        !== filterPhase)   return false;
+    if (filterProduct !== 'All' && p.productFamily       !== filterProduct) return false;
+    if (filterManager !== 'All' && p.projectOwnerManager !== filterManager) return false;
     if (search) {
       const q = search.toLowerCase();
       if (!p.accountName?.toLowerCase().includes(q) &&
@@ -1045,7 +1049,7 @@ const ProjectsOverview = ({ data }) => {
           !p.projectId?.toLowerCase().includes(q)) return false;
     }
     return true;
-  }), [data, filterHealth, filterState, filterPhase, filterProduct, search]);
+  }), [data, filterHealth, filterState, filterPhase, filterProduct, filterManager, search]);
 
   const total       = filtered.length;
   const active      = filtered.filter(p => p.projectState === 'Active').length;
@@ -1056,9 +1060,10 @@ const ProjectsOverview = ({ data }) => {
   const escalated   = filtered.filter(p => p.isEscalated).length;
   const totalValue  = filtered.reduce((s, p) => s + (p.bookingValue || 0), 0);
 
-  const allPhases   = useMemo(() => [...new Set(data.map(p => p.currentPhase).filter(Boolean))].sort(), [data]);
-  const allProducts = useMemo(() => [...new Set(data.map(p => p.productFamily).filter(Boolean))].sort(), [data]);
-  const allStates   = useMemo(() => [...new Set(data.map(p => p.projectState).filter(Boolean))].sort(), [data]);
+  const allPhases    = useMemo(() => [...new Set(data.map(p => p.currentPhase).filter(Boolean))].sort(), [data]);
+  const allProducts  = useMemo(() => [...new Set(data.map(p => p.productFamily).filter(Boolean))].sort(), [data]);
+  const allStates    = useMemo(() => [...new Set(data.map(p => p.projectState).filter(Boolean))].sort(), [data]);
+  const allManagers  = useMemo(() => [...new Set(data.map(p => p.projectOwnerManager).filter(Boolean))].sort(), [data]);
 
   const phaseChartData = allPhases.map(ph => ({
     name: ph.length > 12 ? ph.slice(0, 12) + '…' : ph,
@@ -1118,10 +1123,11 @@ const ProjectsOverview = ({ data }) => {
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <FilterControl label="Health"  value={filterHealth}  options={['All','Green','Yellow','Red']} onChange={setFilterHealth} />
-        <FilterControl label="State"   value={filterState}   options={['All', ...allStates]}          onChange={setFilterState} />
-        <FilterControl label="Phase"   value={filterPhase}   options={['All', ...allPhases]}          onChange={setFilterPhase} />
-        <FilterControl label="Product" value={filterProduct} options={['All', ...allProducts]}        onChange={setFilterProduct} />
+        <FilterControl label="Health"   value={filterHealth}  options={['All','Green','Yellow','Red']} onChange={setFilterHealth} />
+        <FilterControl label="State"    value={filterState}   options={['All', ...allStates]}          onChange={setFilterState} />
+        <FilterControl label="Phase"    value={filterPhase}   options={['All', ...allPhases]}          onChange={setFilterPhase} />
+        <FilterControl label="Product"  value={filterProduct} options={['All', ...allProducts]}        onChange={setFilterProduct} />
+        <FilterControl label="Manager"  value={filterManager} options={['All', ...allManagers]}        onChange={setFilterManager} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.1em', textTransform: 'uppercase', paddingLeft: 2 }}>Search</label>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Account / Project ID…"
@@ -1250,6 +1256,208 @@ const ProjectsOverview = ({ data }) => {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── PROJECTS BY MANAGER VIEW ────────────────────────────────────────────────
+const ProjectsByManagerView = ({ data }) => {
+  const [filterHealth,  setFilterHealth]  = useState('All');
+  const [filterState,   setFilterState]   = useState('All');
+  const [filterPhase,   setFilterPhase]   = useState('All');
+  const [search,        setSearch]        = useState('');
+  const [expanded,      setExpanded]      = useState({});
+
+  const allPhases = useMemo(() => [...new Set(data.map(p => p.currentPhase).filter(Boolean))].sort(), [data]);
+  const allStates = useMemo(() => [...new Set(data.map(p => p.projectState).filter(Boolean))].sort(), [data]);
+
+  const filtered = useMemo(() => data.filter(p => {
+    if (filterHealth !== 'All' && p.health       !== filterHealth) return false;
+    if (filterState  !== 'All' && p.projectState !== filterState)  return false;
+    if (filterPhase  !== 'All' && p.currentPhase !== filterPhase)  return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!p.accountName?.toLowerCase().includes(q) &&
+          !p.projectName?.toLowerCase().includes(q)  &&
+          !p.projectId?.toLowerCase().includes(q)    &&
+          !p.projectOwnerManager?.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  }), [data, filterHealth, filterState, filterPhase, search]);
+
+  // Group by manager
+  const groups = useMemo(() => {
+    const map = {};
+    for (const p of filtered) {
+      const mgr = p.projectOwnerManager || 'Unassigned';
+      if (!map[mgr]) map[mgr] = [];
+      map[mgr].push(p);
+    }
+    return Object.entries(map)
+      .map(([mgr, projects]) => ({
+        manager: mgr,
+        projects,
+        total:  projects.length,
+        active: projects.filter(p => p.projectState === 'Active').length,
+        red:    projects.filter(p => p.health === 'Red').length,
+        yellow: projects.filter(p => p.health === 'Yellow').length,
+        green:  projects.filter(p => p.health === 'Green').length,
+        value:  projects.reduce((s, p) => s + (p.bookingValue || 0), 0),
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [filtered]);
+
+  const toggleAll = (open) => {
+    const next = {};
+    groups.forEach(g => { next[g.manager] = open; });
+    setExpanded(next);
+  };
+
+  if (data.length === 0) return (
+    <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 400, gap: 12 }}>
+      <Users size={40} style={{ color: 'var(--text-3)' }} />
+      <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-2)', margin: 0 }}>No projects loaded</p>
+      <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>Upload a project report first</p>
+    </div>
+  );
+
+  return (
+    <div className="animate-in">
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <FilterControl label="Health" value={filterHealth} options={['All','Green','Yellow','Red']} onChange={setFilterHealth} />
+          <FilterControl label="State"  value={filterState}  options={['All', ...allStates]}          onChange={setFilterState} />
+          <FilterControl label="Phase"  value={filterPhase}  options={['All', ...allPhases]}          onChange={setFilterPhase} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.1em', textTransform: 'uppercase', paddingLeft: 2 }}>Search</label>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Account / Manager…"
+              style={{ fontFamily: 'Syne, sans-serif', fontSize: 12, fontWeight: 500, color: 'var(--text-1)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 12px', outline: 'none', width: 180 }} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span className="font-data" style={{ fontSize: 10, color: 'var(--text-3)' }}>{groups.length} managers · {filtered.length} projects</span>
+          <button onClick={() => toggleAll(true)} style={{ fontSize: 10, fontWeight: 700, fontFamily: 'Syne, sans-serif', color: 'var(--accent)', background: 'var(--accent-dim)', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>Expand all</button>
+          <button onClick={() => toggleAll(false)} style={{ fontSize: 10, fontWeight: 700, fontFamily: 'Syne, sans-serif', color: 'var(--text-3)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>Collapse all</button>
+        </div>
+      </div>
+
+      {/* Manager groups */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {groups.map(g => {
+          const isOpen = !!expanded[g.manager];
+          return (
+            <div key={g.manager} style={{ background: 'var(--bg-card)', borderRadius: 16, border: '1px solid var(--border)', overflow: 'hidden' }}>
+              {/* Manager header */}
+              <button
+                onClick={() => setExpanded(prev => ({ ...prev, [g.manager]: !prev[g.manager] }))}
+                style={{
+                  width: '100%', padding: '14px 20px', background: 'none', border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left',
+                  borderBottom: isOpen ? '1px solid var(--border)' : 'none',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#F8F7F4'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                {/* Expand icon */}
+                <ChevronRight size={14} style={{ color: 'var(--text-3)', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
+
+                {/* Manager name */}
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {g.manager}
+                </span>
+
+                {/* Health dots */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                  {g.red > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#F87171' }} />
+                      <span className="font-data" style={{ fontSize: 11, fontWeight: 700, color: '#F87171' }}>{g.red}</span>
+                    </div>
+                  )}
+                  {g.yellow > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#FFB800' }} />
+                      <span className="font-data" style={{ fontSize: 11, fontWeight: 700, color: '#FFB800' }}>{g.yellow}</span>
+                    </div>
+                  )}
+                  {g.green > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#00D4A8' }} />
+                      <span className="font-data" style={{ fontSize: 11, fontWeight: 700, color: '#00D4A8' }}>{g.green}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div style={{ width: 1, height: 16, background: 'var(--border)', flexShrink: 0 }} />
+
+                {/* Summary */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <div className="font-data" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)' }}>{g.total}</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>projects</div>
+                  </div>
+                  {g.value > 0 && (
+                    <div style={{ textAlign: 'right' }}>
+                      <div className="font-data" style={{ fontSize: 13, fontWeight: 700, color: '#A78BFA' }}>
+                        ${g.value.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                      </div>
+                      <div style={{ fontSize: 9, color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>value</div>
+                    </div>
+                  )}
+                </div>
+              </button>
+
+              {/* Projects list */}
+              {isOpen && (
+                <div>
+                  {/* Sub-header */}
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: '20px 80px minmax(0,1fr) 130px 100px minmax(0,1fr) 90px 90px',
+                    gap: 12, padding: '7px 20px', background: '#FAFAF8',
+                  }}>
+                    {['', 'ID', 'Account / Project', 'Phase', 'State', 'Owner', 'Go Live', 'Value'].map(h => (
+                      <span key={h} style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{h}</span>
+                    ))}
+                  </div>
+                  {g.projects.map((p, i) => (
+                    <div key={p.id} style={{
+                      display: 'grid', gridTemplateColumns: '20px 80px minmax(0,1fr) 130px 100px minmax(0,1fr) 90px 90px',
+                      gap: 12, padding: '9px 20px', alignItems: 'center',
+                      borderTop: '1px solid var(--border)', transition: 'background 0.1s',
+                    }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#F8F7F4'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: HEALTH_COLOR[p.health] || '#9CA3AF', boxShadow: `0 0 4px ${HEALTH_COLOR[p.health] || '#9CA3AF'}60` }} />
+                      <span className="font-data" style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 600 }}>{p.projectId}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.accountName}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.projectName}</div>
+                      </div>
+                      <div>
+                        {p.currentPhase ? (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: `${PHASE_COLOR[p.currentPhase] || '#6B7280'}18`, color: PHASE_COLOR[p.currentPhase] || '#6B7280', letterSpacing: '0.04em' }}>{p.currentPhase}</span>
+                        ) : <span style={{ fontSize: 10, color: 'var(--text-3)' }}>—</span>}
+                      </div>
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: p.projectState === 'Active' ? 'rgba(0,212,168,0.1)' : 'rgba(251,146,60,0.12)', color: p.projectState === 'Active' ? '#00D4A8' : '#FB923C' }}>{p.projectState || '—'}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-2)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.projectOwner || '—'}</div>
+                      </div>
+                      <span className="font-data" style={{ fontSize: 10, color: 'var(--text-3)' }}>{p.targetGoLiveDate || '—'}</span>
+                      <span className="font-data" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-1)' }}>
+                        {p.bookingValue ? `$${p.bookingValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
