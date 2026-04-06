@@ -1029,14 +1029,16 @@ const excelDateToStr = (n) => {
 
 // ─── PROJECTS OVERVIEW ────────────────────────────────────────────────────────
 const ProjectsOverview = ({ data }) => {
-  const [filterHealth,  setFilterHealth]  = useState('All');
-  const [filterState,   setFilterState]   = useState('All');
-  const [filterPhase,   setFilterPhase]   = useState('All');
-  const [filterProduct, setFilterProduct] = useState('All');
-  const [filterManager, setFilterManager] = useState('All');
-  const [search,        setSearch]        = useState('');
+  const [filterHealth,    setFilterHealth]    = useState('All');
+  const [filterState,     setFilterState]     = useState('All');
+  const [filterPhase,     setFilterPhase]     = useState('All');
+  const [filterProduct,   setFilterProduct]   = useState('All');
+  const [filterManager,   setFilterManager]   = useState('All');
+  const [filterEscalated, setFilterEscalated] = useState(false);
+  const [search,          setSearch]          = useState('');
 
   const filtered = useMemo(() => data.filter(p => {
+    if (filterEscalated && !p.isEscalated)                               return false;
     if (filterHealth  !== 'All' && p.health              !== filterHealth)  return false;
     if (filterState   !== 'All' && p.projectState        !== filterState)   return false;
     if (filterPhase   !== 'All' && p.currentPhase        !== filterPhase)   return false;
@@ -1049,16 +1051,29 @@ const ProjectsOverview = ({ data }) => {
           !p.projectId?.toLowerCase().includes(q)) return false;
     }
     return true;
-  }), [data, filterHealth, filterState, filterPhase, filterProduct, filterManager, search]);
+  }), [data, filterHealth, filterState, filterPhase, filterProduct, filterManager, filterEscalated, search]);
 
-  const total       = filtered.length;
-  const active      = filtered.filter(p => p.projectState === 'Active').length;
-  const onHold      = filtered.filter(p => p.projectState === 'On Hold').length;
-  const redCount    = filtered.filter(p => p.health === 'Red').length;
-  const yellowCount = filtered.filter(p => p.health === 'Yellow').length;
-  const greenCount  = filtered.filter(p => p.health === 'Green').length;
-  const escalated   = filtered.filter(p => p.isEscalated).length;
-  const totalValue  = filtered.reduce((s, p) => s + (p.bookingValue || 0), 0);
+  const total          = filtered.length;
+  const active         = filtered.filter(p => p.projectState === 'Active').length;
+  const onHold         = filtered.filter(p => p.projectState === 'On Hold').length;
+  const redCount       = filtered.filter(p => p.health === 'Red').length;
+  const yellowCount    = filtered.filter(p => p.health === 'Yellow').length;
+  const greenCount     = filtered.filter(p => p.health === 'Green').length;
+  const escalated      = filtered.filter(p => p.isEscalated).length;
+  const totalValue     = filtered.reduce((s, p) => s + (p.bookingValue    || 0), 0);
+  const totalBudgeted  = data.reduce((s, p) => s + (p.budgetedHours   || 0), 0);
+  const totalRemaining = data.reduce((s, p) => s + (p.contractedHoursRem || 0), 0);
+  const pctRemaining   = totalBudgeted > 0 ? (totalRemaining / totalBudgeted) * 100 : 0;
+
+  const resetKpiFilters = () => { setFilterHealth('All'); setFilterState('All'); setFilterEscalated(false); };
+  const kpiCards = [
+    { key: 'total',     label: 'Total',     value: total,      color: '#6B7280', icon: <FolderKanban size={15} />, active: filterHealth === 'All' && filterState === 'All' && !filterEscalated, onClick: resetKpiFilters },
+    { key: 'active',    label: 'Active',    value: active,     color: '#00D4A8', icon: <CheckCircle2 size={15} />, active: filterState === 'Active',   onClick: () => { setFilterState('Active');  setFilterHealth('All'); setFilterEscalated(false); } },
+    { key: 'onhold',    label: 'On Hold',   value: onHold,     color: '#FFB800', icon: <Clock size={15} />,        active: filterState === 'On Hold',  onClick: () => { setFilterState('On Hold'); setFilterHealth('All'); setFilterEscalated(false); } },
+    { key: 'red',       label: 'Red',       value: redCount,   color: '#F87171', icon: <AlertCircle size={15} />,  active: filterHealth === 'Red',     onClick: () => { setFilterHealth('Red');   setFilterState('All'); setFilterEscalated(false); } },
+    { key: 'yellow',    label: 'Yellow',    value: yellowCount, color: '#FFB800', icon: <AlertCircle size={15} />, active: filterHealth === 'Yellow',   onClick: () => { setFilterHealth('Yellow'); setFilterState('All'); setFilterEscalated(false); } },
+    { key: 'escalated', label: 'Escalated', value: escalated,  color: '#F472B6', icon: <TrendingUp size={15} />,  active: filterEscalated,            onClick: () => { setFilterEscalated(true); setFilterState('All'); setFilterHealth('All'); } },
+  ];
 
   const allPhases    = useMemo(() => [...new Set(data.map(p => p.currentPhase).filter(Boolean))].sort(), [data]);
   const allProducts  = useMemo(() => [...new Set(data.map(p => p.productFamily).filter(Boolean))].sort(), [data]);
@@ -1089,36 +1104,72 @@ const ProjectsOverview = ({ data }) => {
 
   return (
     <div className="animate-in">
-      {/* KPI cards */}
+      {/* KPI cards — clickable */}
       <div className="card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 14, marginBottom: 28 }}>
-        {[
-          { label: 'Total',     value: total,      color: '#6B7280', icon: <FolderKanban size={15} /> },
-          { label: 'Active',    value: active,      color: '#00D4A8', icon: <CheckCircle2 size={15} /> },
-          { label: 'On Hold',   value: onHold,      color: '#FFB800', icon: <Clock size={15} /> },
-          { label: 'Red',       value: redCount,    color: '#F87171', icon: <AlertCircle size={15} /> },
-          { label: 'Yellow',    value: yellowCount, color: '#FFB800', icon: <AlertCircle size={15} /> },
-          { label: 'Escalated', value: escalated,   color: '#F472B6', icon: <TrendingUp size={15} /> },
-        ].map(kpi => (
-          <div key={kpi.label} className="stat-card" style={{ background: 'var(--bg-card)', borderRadius: 16, padding: '18px 20px', border: '1px solid var(--border)', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${kpi.color}40, ${kpi.color}10)` }} />
+        {kpiCards.map(kpi => (
+          <button key={kpi.key} onClick={kpi.onClick} className="stat-card" style={{
+            background: kpi.active ? `${kpi.color}10` : 'var(--bg-card)',
+            borderRadius: 16, padding: '18px 20px',
+            border: kpi.active ? `1.5px solid ${kpi.color}60` : '1px solid var(--border)',
+            position: 'relative', overflow: 'hidden',
+            cursor: 'pointer', textAlign: 'left', width: '100%',
+            fontFamily: 'Syne, sans-serif', transition: 'all 0.18s',
+            boxShadow: kpi.active ? `0 4px 20px -4px ${kpi.color}30` : 'none',
+          }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${kpi.color}${kpi.active ? '80' : '40'}, ${kpi.color}10)` }} />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{kpi.label}</span>
-              <span style={{ color: kpi.color, opacity: 0.8 }}>{kpi.icon}</span>
+              <span style={{ fontSize: 9, fontWeight: 700, color: kpi.active ? kpi.color : 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{kpi.label}</span>
+              <span style={{ color: kpi.color, opacity: kpi.active ? 1 : 0.7 }}>{kpi.icon}</span>
             </div>
-            <div className="font-data" style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-1)', lineHeight: 1 }}>{kpi.value}</div>
-          </div>
+            <div className="font-data" style={{ fontSize: 28, fontWeight: 700, color: kpi.active ? kpi.color : 'var(--text-1)', lineHeight: 1 }}>{kpi.value}</div>
+            {kpi.active && (
+              <div style={{ marginTop: 8, fontSize: 8, fontWeight: 700, color: kpi.color, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.8 }}>Filtered ↓</div>
+            )}
+          </button>
         ))}
       </div>
 
-      {/* Total value banner */}
-      <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: '14px 20px', border: '1px solid var(--border)', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Target size={14} style={{ color: '#A78BFA' }} />
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Total Portfolio Value</span>
+      {/* Stats banner */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 24 }}>
+        {/* Portfolio value */}
+        <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: '14px 20px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <Target size={13} style={{ color: '#A78BFA' }} />
+            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Portfolio Value</span>
+          </div>
+          <span className="font-data" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-1)' }}>
+            ${totalValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+          </span>
         </div>
-        <span className="font-data" style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-1)' }}>
-          ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-        </span>
+        {/* Budgeted hours */}
+        <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: '14px 20px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <Clock size={13} style={{ color: '#38BDF8' }} />
+            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Budgeted Hours</span>
+          </div>
+          <span className="font-data" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-1)' }}>
+            {totalBudgeted.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+          </span>
+        </div>
+        {/* Contracted hours remaining */}
+        <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: '14px 20px', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <UserCheck size={13} style={{ color: '#4ADE80' }} />
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Hours Remaining</span>
+            </div>
+            <span className="font-data" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-1)' }}>
+              {totalRemaining.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+            </span>
+          </div>
+          {/* Progress bar */}
+          <div style={{ height: 4, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${Math.min(pctRemaining, 100)}%`, background: pctRemaining > 60 ? '#4ADE80' : pctRemaining > 30 ? '#FFB800' : '#F87171', borderRadius: 4, transition: 'width 0.5s' }} />
+          </div>
+          <div style={{ marginTop: 4, fontSize: 9, color: 'var(--text-3)', fontWeight: 600 }}>
+            {pctRemaining.toFixed(1)}% of budgeted hours remaining
+          </div>
+        </div>
       </div>
 
       {/* Filters */}
