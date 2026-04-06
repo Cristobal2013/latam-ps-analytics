@@ -10,7 +10,8 @@ import {
 import {
   LayoutDashboard, Upload, Users, FileText, Loader2, TrendingUp, Clock,
   AlertCircle, CheckCircle2, Search, ChevronRight, FileSpreadsheet, Database,
-  Globe2, UserCheck, Target, Briefcase, Activity
+  Globe2, UserCheck, Target, Briefcase, Activity, BarChart2, FolderKanban,
+  CalendarDays, Building2
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -44,9 +45,12 @@ const semaphore = (pct) =>
 
 // ─── APP ──────────────────────────────────────────────────────────────────────
 const App = () => {
-  const [loading, setLoading]       = useState(true);
-  const [activeTab, setActiveTab]   = useState('dashboard');
-  const [hoursData, setHoursData]   = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [activeTab, setActiveTab]       = useState('dashboard');
+  const [hoursData, setHoursData]       = useState([]);
+  const [mode, setMode]                 = useState('utilization'); // 'utilization' | 'projects'
+  const [activeProjectTab, setActiveProjectTab] = useState('overview');
+  const [projectsData, setProjectsData] = useState([]);
 
   const [selectedMonth,  setSelectedMonth]  = useState('All');
   const [filterRegion,   setFilterRegion]   = useState('All');
@@ -63,7 +67,12 @@ const App = () => {
       snap => { setHoursData(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false); },
       err  => { console.error(err); setLoading(false); }
     );
-    return () => unsub();
+    const col2 = collection(db, 'artifacts', appId, 'public', 'data', 'ps_projects_v1');
+    const unsub2 = onSnapshot(col2,
+      snap => setProjectsData(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      () => {}
+    );
+    return () => { unsub(); unsub2(); };
   }, []);
 
   const availableMonths = useMemo(() => {
@@ -119,7 +128,7 @@ if (loading) return (
       {/* ── Sidebar ── */}
       <aside className="flex flex-col shrink-0 overflow-y-auto" style={{ width: 220, background: 'var(--bg-sidebar)' }}>
         {/* Logo */}
-        <div style={{ padding: '28px 20px 24px' }}>
+        <div style={{ padding: '28px 20px 20px' }}>
           <div className="flex items-center gap-2.5">
             <div style={{ width: 28, height: 28, background: 'var(--accent)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Activity size={15} color="#000" strokeWidth={2.5} />
@@ -129,30 +138,74 @@ if (loading) return (
           <div style={{ marginTop: 16, height: '1px', background: 'var(--border-dark)' }} />
         </div>
 
-        {/* Nav */}
-        <nav style={{ flex: 1, padding: '0 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {[
-            { key: 'dashboard', icon: <LayoutDashboard size={15} />, label: 'Dashboard' },
-            { key: 'upload',    icon: <Upload size={15} />,          label: 'Upload Report' },
-            { key: 'regions',   icon: <Globe2 size={15} />,          label: 'By Region' },
-            { key: 'managers',  icon: <Users size={15} />,           label: 'By Manager' },
-            { key: 'employees', icon: <FileText size={15} />,        label: 'By Employee' },
-          ].map(item => (
-            <button key={item.key} onClick={() => setActiveTab(item.key)}
-              className={`nav-item ${activeTab === item.key ? 'active' : ''}`}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '9px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                width: '100%', textAlign: 'left', fontSize: 13, fontWeight: activeTab === item.key ? 700 : 500,
-                fontFamily: 'Syne, sans-serif',
-                background: activeTab === item.key ? 'rgba(255,255,255,0.06)' : 'transparent',
-                color: activeTab === item.key ? '#fff' : '#6B7280',
+        {/* Mode toggle */}
+        <div style={{ padding: '0 12px 16px' }}>
+          <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 3, display: 'flex', gap: 2 }}>
+            {[
+              { key: 'utilization', icon: <BarChart2 size={12} />, label: 'Utilization' },
+              { key: 'projects',    icon: <FolderKanban size={12} />, label: 'Projects' },
+            ].map(m => (
+              <button key={m.key} onClick={() => setMode(m.key)} style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                padding: '6px 4px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                fontFamily: 'Syne, sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.02em',
+                background: mode === m.key ? 'rgba(255,255,255,0.10)' : 'transparent',
+                color: mode === m.key ? '#fff' : '#4B5563',
                 transition: 'all 0.15s',
               }}>
-              <span style={{ color: activeTab === item.key ? 'var(--accent)' : '#4B5563' }}>{item.icon}</span>
-              {item.label}
-            </button>
-          ))}
+                <span style={{ color: mode === m.key ? 'var(--accent)' : '#4B5563' }}>{m.icon}</span>
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Nav */}
+        <nav style={{ flex: 1, padding: '0 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {mode === 'utilization' ? (
+            [
+              { key: 'dashboard', icon: <LayoutDashboard size={15} />, label: 'Dashboard' },
+              { key: 'upload',    icon: <Upload size={15} />,          label: 'Upload Report' },
+              { key: 'regions',   icon: <Globe2 size={15} />,          label: 'By Region' },
+              { key: 'managers',  icon: <Users size={15} />,           label: 'By Manager' },
+              { key: 'employees', icon: <FileText size={15} />,        label: 'By Employee' },
+            ].map(item => (
+              <button key={item.key} onClick={() => setActiveTab(item.key)}
+                className={`nav-item ${activeTab === item.key ? 'active' : ''}`}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '9px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  width: '100%', textAlign: 'left', fontSize: 13, fontWeight: activeTab === item.key ? 700 : 500,
+                  fontFamily: 'Syne, sans-serif',
+                  background: activeTab === item.key ? 'rgba(255,255,255,0.06)' : 'transparent',
+                  color: activeTab === item.key ? '#fff' : '#6B7280',
+                  transition: 'all 0.15s',
+                }}>
+                <span style={{ color: activeTab === item.key ? 'var(--accent)' : '#4B5563' }}>{item.icon}</span>
+                {item.label}
+              </button>
+            ))
+          ) : (
+            [
+              { key: 'overview', icon: <LayoutDashboard size={15} />, label: 'Overview' },
+              { key: 'upload',   icon: <Upload size={15} />,          label: 'Upload Projects' },
+            ].map(item => (
+              <button key={item.key} onClick={() => setActiveProjectTab(item.key)}
+                className={`nav-item ${activeProjectTab === item.key ? 'active' : ''}`}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '9px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  width: '100%', textAlign: 'left', fontSize: 13, fontWeight: activeProjectTab === item.key ? 700 : 500,
+                  fontFamily: 'Syne, sans-serif',
+                  background: activeProjectTab === item.key ? 'rgba(255,255,255,0.06)' : 'transparent',
+                  color: activeProjectTab === item.key ? '#fff' : '#6B7280',
+                  transition: 'all 0.15s',
+                }}>
+                <span style={{ color: activeProjectTab === item.key ? 'var(--accent)' : '#4B5563' }}>{item.icon}</span>
+                {item.label}
+              </button>
+            ))
+          )}
         </nav>
 
       </aside>
@@ -167,38 +220,56 @@ if (loading) return (
           padding: '14px 32px', position: 'sticky', top: 0, zIndex: 30,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text-1)', margin: 0 }}>
-                Control Panel
-              </h2>
-              {filteredData.length !== hoursData.length && (
-                <span className="font-data" style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-dim)', padding: '2px 8px', borderRadius: 20 }}>
-                  {filteredData.length} filtered
+          {mode === 'utilization' ? (
+            <>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text-1)', margin: 0 }}>Control Panel</h2>
+                  {filteredData.length !== hoursData.length && (
+                    <span className="font-data" style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-dim)', padding: '2px 8px', borderRadius: 20 }}>
+                      {filteredData.length} filtered
+                    </span>
+                  )}
+                </div>
+                <p style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 500, margin: '2px 0 0', letterSpacing: '0.02em' }}>PS Utilization · LATAM Overview</p>
+              </div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <FilterControl label="Month"    value={selectedMonth}  options={availableMonths} onChange={v => { setSelectedMonth(v); setFilterRegion('All'); setFilterManager('All'); setFilterEmployee('All'); }} />
+                <FilterControl label="Region"   value={filterRegion}   options={regions}         onChange={v => { setFilterRegion(v); setFilterManager('All'); setFilterEmployee('All'); }} />
+                <FilterControl label="Manager"  value={filterManager}  options={managers}        onChange={v => { setFilterManager(v); setFilterEmployee('All'); }} />
+                <FilterControl label="Employee" value={filterEmployee} options={employees}       onChange={setFilterEmployee} />
+              </div>
+            </>
+          ) : (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text-1)', margin: 0 }}>Project Status</h2>
+                <span className="font-data" style={{ fontSize: 10, fontWeight: 600, color: '#A78BFA', background: 'rgba(167,139,250,0.12)', padding: '2px 8px', borderRadius: 20 }}>
+                  {projectsData.length} projects
                 </span>
-              )}
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 500, margin: '2px 0 0', letterSpacing: '0.02em' }}>PS Projects · Portfolio Overview</p>
             </div>
-            <p style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 500, margin: '2px 0 0', letterSpacing: '0.02em' }}>
-              PS Utilization · LATAM Overview
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <FilterControl label="Month"    value={selectedMonth}  options={availableMonths} onChange={v => { setSelectedMonth(v); setFilterRegion('All'); setFilterManager('All'); setFilterEmployee('All'); }} />
-            <FilterControl label="Region"   value={filterRegion}   options={regions}         onChange={v => { setFilterRegion(v); setFilterManager('All'); setFilterEmployee('All'); }} />
-            <FilterControl label="Manager"  value={filterManager}  options={managers}        onChange={v => { setFilterManager(v); setFilterEmployee('All'); }} />
-            <FilterControl label="Employee" value={filterEmployee} options={employees}       onChange={setFilterEmployee} />
-          </div>
+          )}
         </header>
 
         {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px' }}>
           <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-            {activeTab === 'dashboard' && <DashboardView data={filteredData} />}
-            {activeTab === 'upload'    && <UploadView setActiveTab={setActiveTab} />}
-            {activeTab === 'regions'   && <RegionView data={filteredData} />}
-            {activeTab === 'managers'  && <GroupedView data={filteredData} groupKey="manager" />}
-            {activeTab === 'employees' && <GroupedView data={filteredData} groupKey="employee" showDetail />}
+            {mode === 'utilization' ? (
+              <>
+                {activeTab === 'dashboard' && <DashboardView data={filteredData} />}
+                {activeTab === 'upload'    && <UploadView setActiveTab={setActiveTab} />}
+                {activeTab === 'regions'   && <RegionView data={filteredData} />}
+                {activeTab === 'managers'  && <GroupedView data={filteredData} groupKey="manager" />}
+                {activeTab === 'employees' && <GroupedView data={filteredData} groupKey="employee" showDetail />}
+              </>
+            ) : (
+              <>
+                {activeProjectTab === 'overview' && <ProjectsOverview data={projectsData} />}
+                {activeProjectTab === 'upload'   && <UploadProjectsView setActiveTab={setActiveProjectTab} />}
+              </>
+            )}
           </div>
         </div>
       </main>
@@ -922,6 +993,405 @@ const UploadView = ({ setActiveTab }) => {
           }}>
             {isUploading ? <Loader2 size={16} className="animate-spin" /> : <TrendingUp size={16} />}
             {isUploading ? 'Processing...' : 'Process and Synchronize'}
+          </button>
+        )}
+
+        {status && (
+          <div className="animate-in" style={{
+            marginTop: 16, width: '100%', padding: '12px 14px',
+            borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10,
+            background: status.type === 'success' ? '#ECFDF5' : status.type === 'error' ? '#FEF2F2' : '#EFF6FF',
+            border: `1px solid ${status.type === 'success' ? '#A7F3D0' : status.type === 'error' ? '#FECACA' : '#BFDBFE'}`,
+          }}>
+            <AlertCircle size={14} style={{ color: status.type === 'success' ? '#059669' : status.type === 'error' ? '#DC2626' : '#2563EB', flexShrink: 0 }} />
+            <p style={{ fontSize: 11, fontWeight: 700, color: status.type === 'success' ? '#065F46' : status.type === 'error' ? '#991B1B' : '#1E40AF', margin: 0 }}>{status.text}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── HEALTH COLORS ────────────────────────────────────────────────────────────
+const HEALTH_COLOR = { Green: '#00D4A8', Yellow: '#FFB800', Red: '#F87171' };
+const PHASE_COLOR  = {
+  Initiation: '#38BDF8', Design: '#A78BFA', Build: '#FFB800',
+  Test: '#FB923C', Cutover: '#F472B6', 'Partially Live': '#4ADE80',
+  'Post-Production': '#00D4A8', Consulting: '#818CF8',
+  'Pending Support Transition': '#6B7280',
+};
+const excelDateToStr = (n) => {
+  if (!n || typeof n !== 'number') return null;
+  return new Date(Math.round((n - 25569) * 86400 * 1000)).toISOString().split('T')[0];
+};
+
+// ─── PROJECTS OVERVIEW ────────────────────────────────────────────────────────
+const ProjectsOverview = ({ data }) => {
+  const [filterHealth,  setFilterHealth]  = useState('All');
+  const [filterState,   setFilterState]   = useState('All');
+  const [filterPhase,   setFilterPhase]   = useState('All');
+  const [filterProduct, setFilterProduct] = useState('All');
+  const [search,        setSearch]        = useState('');
+
+  const filtered = useMemo(() => data.filter(p => {
+    if (filterHealth  !== 'All' && p.health        !== filterHealth)  return false;
+    if (filterState   !== 'All' && p.projectState  !== filterState)   return false;
+    if (filterPhase   !== 'All' && p.currentPhase  !== filterPhase)   return false;
+    if (filterProduct !== 'All' && p.productFamily !== filterProduct) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!p.accountName?.toLowerCase().includes(q) &&
+          !p.projectName?.toLowerCase().includes(q)  &&
+          !p.projectId?.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  }), [data, filterHealth, filterState, filterPhase, filterProduct, search]);
+
+  const total       = filtered.length;
+  const active      = filtered.filter(p => p.projectState === 'Active').length;
+  const onHold      = filtered.filter(p => p.projectState === 'On Hold').length;
+  const redCount    = filtered.filter(p => p.health === 'Red').length;
+  const yellowCount = filtered.filter(p => p.health === 'Yellow').length;
+  const greenCount  = filtered.filter(p => p.health === 'Green').length;
+  const escalated   = filtered.filter(p => p.isEscalated).length;
+  const totalValue  = filtered.reduce((s, p) => s + (p.bookingValue || 0), 0);
+
+  const allPhases   = useMemo(() => [...new Set(data.map(p => p.currentPhase).filter(Boolean))].sort(), [data]);
+  const allProducts = useMemo(() => [...new Set(data.map(p => p.productFamily).filter(Boolean))].sort(), [data]);
+  const allStates   = useMemo(() => [...new Set(data.map(p => p.projectState).filter(Boolean))].sort(), [data]);
+
+  const phaseChartData = allPhases.map(ph => ({
+    name: ph.length > 12 ? ph.slice(0, 12) + '…' : ph,
+    fullName: ph,
+    Green:  filtered.filter(p => p.currentPhase === ph && p.health === 'Green').length,
+    Yellow: filtered.filter(p => p.currentPhase === ph && p.health === 'Yellow').length,
+    Red:    filtered.filter(p => p.currentPhase === ph && p.health === 'Red').length,
+  }));
+
+  const healthPieData = [
+    { name: 'Green',  value: greenCount,  color: '#00D4A8' },
+    { name: 'Yellow', value: yellowCount, color: '#FFB800' },
+    { name: 'Red',    value: redCount,    color: '#F87171' },
+  ].filter(d => d.value > 0);
+
+  if (data.length === 0) return (
+    <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 400, gap: 12 }}>
+      <FolderKanban size={40} style={{ color: 'var(--text-3)' }} />
+      <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-2)', margin: 0 }}>No projects loaded</p>
+      <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>Upload a project report to get started</p>
+    </div>
+  );
+
+  return (
+    <div className="animate-in">
+      {/* KPI cards */}
+      <div className="card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 14, marginBottom: 28 }}>
+        {[
+          { label: 'Total',     value: total,      color: '#6B7280', icon: <FolderKanban size={15} /> },
+          { label: 'Active',    value: active,      color: '#00D4A8', icon: <CheckCircle2 size={15} /> },
+          { label: 'On Hold',   value: onHold,      color: '#FFB800', icon: <Clock size={15} /> },
+          { label: 'Red',       value: redCount,    color: '#F87171', icon: <AlertCircle size={15} /> },
+          { label: 'Yellow',    value: yellowCount, color: '#FFB800', icon: <AlertCircle size={15} /> },
+          { label: 'Escalated', value: escalated,   color: '#F472B6', icon: <TrendingUp size={15} /> },
+        ].map(kpi => (
+          <div key={kpi.label} className="stat-card" style={{ background: 'var(--bg-card)', borderRadius: 16, padding: '18px 20px', border: '1px solid var(--border)', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${kpi.color}40, ${kpi.color}10)` }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{kpi.label}</span>
+              <span style={{ color: kpi.color, opacity: 0.8 }}>{kpi.icon}</span>
+            </div>
+            <div className="font-data" style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-1)', lineHeight: 1 }}>{kpi.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Total value banner */}
+      <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: '14px 20px', border: '1px solid var(--border)', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Target size={14} style={{ color: '#A78BFA' }} />
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Total Portfolio Value</span>
+        </div>
+        <span className="font-data" style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-1)' }}>
+          ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+        </span>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <FilterControl label="Health"  value={filterHealth}  options={['All','Green','Yellow','Red']} onChange={setFilterHealth} />
+        <FilterControl label="State"   value={filterState}   options={['All', ...allStates]}          onChange={setFilterState} />
+        <FilterControl label="Phase"   value={filterPhase}   options={['All', ...allPhases]}          onChange={setFilterPhase} />
+        <FilterControl label="Product" value={filterProduct} options={['All', ...allProducts]}        onChange={setFilterProduct} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.1em', textTransform: 'uppercase', paddingLeft: 2 }}>Search</label>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Account / Project ID…"
+            style={{
+              fontFamily: 'Syne, sans-serif', fontSize: 12, fontWeight: 500, color: 'var(--text-1)',
+              background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8,
+              padding: '7px 12px', outline: 'none', width: 200,
+            }} />
+        </div>
+      </div>
+
+      {/* Charts row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, marginBottom: 28 }}>
+        {/* Phase breakdown */}
+        <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: '22px', border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-2)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 16 }}>Projects by Phase &amp; Health</div>
+          <ResponsiveContainer width="100%" height={190}>
+            <BarChart data={phaseChartData} barSize={12} barCategoryGap="30%">
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 9, fill: 'var(--text-3)', fontFamily: 'Syne' }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 9, fill: 'var(--text-3)', fontFamily: 'JetBrains Mono' }} tickLine={false} axisLine={false} width={24} />
+              <Tooltip
+                contentStyle={{ borderRadius: 10, border: '1px solid var(--border)', fontFamily: 'Syne', fontSize: 11 }}
+                formatter={(v, name) => [v, name]}
+              />
+              <Bar dataKey="Green"  stackId="a" fill="#00D4A8" />
+              <Bar dataKey="Yellow" stackId="a" fill="#FFB800" />
+              <Bar dataKey="Red"    stackId="a" fill="#F87171" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Health pie */}
+        <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: '22px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-2)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>Health Mix</div>
+          <ResponsiveContainer width="100%" height={130}>
+            <PieChart>
+              <Pie data={healthPieData} cx="50%" cy="50%" innerRadius={38} outerRadius={56} dataKey="value" paddingAngle={3}>
+                {healthPieData.map((e, i) => <Cell key={i} fill={e.color} />)}
+              </Pie>
+              <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid var(--border)', fontFamily: 'Syne', fontSize: 11 }} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+            {healthPieData.map(d => (
+              <div key={d.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color }} />
+                  <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 600 }}>{d.name}</span>
+                </div>
+                <span className="font-data" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)' }}>{d.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Projects table */}
+      <div style={{ background: 'var(--bg-card)', borderRadius: 16, border: '1px solid var(--border)', overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)' }}>Projects</span>
+          <span className="font-data" style={{ fontSize: 10, color: 'var(--text-3)' }}>{filtered.length} shown</span>
+        </div>
+        {/* Table header */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '20px 80px minmax(0,1fr) 130px 100px minmax(0,1fr) 90px 90px',
+          gap: 12, padding: '8px 20px',
+          background: '#F8F7F4', borderBottom: '1px solid var(--border)',
+        }}>
+          {['', 'ID', 'Account / Project', 'Phase', 'State', 'Owner', 'Go Live', 'Value (USD)'].map(h => (
+            <span key={h} style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{h}</span>
+          ))}
+        </div>
+        <div style={{ maxHeight: 500, overflowY: 'auto' }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-3)', fontSize: 13, fontWeight: 600 }}>No projects match the filters</div>
+          ) : filtered.slice(0, 250).map((p, i) => (
+            <div key={p.id} style={{
+              display: 'grid',
+              gridTemplateColumns: '20px 80px minmax(0,1fr) 130px 100px minmax(0,1fr) 90px 90px',
+              gap: 12, padding: '10px 20px', alignItems: 'center',
+              borderBottom: i < filtered.length - 1 ? '1px solid var(--border)' : 'none',
+              transition: 'background 0.1s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = '#F8F7F4'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              {/* Health dot */}
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: HEALTH_COLOR[p.health] || '#9CA3AF', boxShadow: `0 0 5px ${HEALTH_COLOR[p.health] || '#9CA3AF'}60` }} />
+              {/* Project ID */}
+              <span className="font-data" style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 600 }}>{p.projectId}</span>
+              {/* Account / Project name */}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.accountName}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.projectName}</div>
+              </div>
+              {/* Phase */}
+              <div>
+                {p.currentPhase ? (
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
+                    background: `${PHASE_COLOR[p.currentPhase] || '#6B7280'}18`,
+                    color: PHASE_COLOR[p.currentPhase] || '#6B7280',
+                    letterSpacing: '0.04em',
+                  }}>{p.currentPhase}</span>
+                ) : <span style={{ fontSize: 10, color: 'var(--text-3)' }}>—</span>}
+              </div>
+              {/* State */}
+              <span style={{
+                fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
+                background: p.projectState === 'Active' ? 'rgba(0,212,168,0.1)' : 'rgba(251,146,60,0.12)',
+                color: p.projectState === 'Active' ? '#00D4A8' : '#FB923C',
+              }}>{p.projectState || '—'}</span>
+              {/* Owner */}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-2)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.projectOwner || '—'}</div>
+                <div style={{ fontSize: 9, color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.projectOwnerManager || ''}</div>
+              </div>
+              {/* Target Go Live */}
+              <span className="font-data" style={{ fontSize: 10, color: 'var(--text-3)' }}>{p.targetGoLiveDate || '—'}</span>
+              {/* Booking Value */}
+              <span className="font-data" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-1)' }}>
+                {p.bookingValue ? `$${p.bookingValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── UPLOAD PROJECTS VIEW ─────────────────────────────────────────────────────
+const UploadProjectsView = ({ setActiveTab }) => {
+  const [file, setFile]               = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [status, setStatus]           = useState(null);
+
+  const processFile = async () => {
+    if (!file || isUploading) return;
+    setIsUploading(true);
+    setStatus({ type: 'info', text: 'Reading file…' });
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setTimeout(async () => {
+        try {
+          const data     = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array', sheetRows: 3000, cellFormula: false, cellHTML: false });
+          const ws       = workbook.Sheets[workbook.SheetNames[0]];
+          if (!ws) throw new Error('No sheet found in file.');
+          const aoa  = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+          const rows = aoa.slice(1).filter(r => Array.isArray(r) && r[0]);
+          if (!rows.length) throw new Error('No data rows found.');
+
+          setStatus({ type: 'info', text: `Processing ${rows.length} projects…` });
+
+          // Delete existing
+          const col  = collection(db, 'artifacts', appId, 'public', 'data', 'ps_projects_v1');
+          const snap = await getDocs(col);
+          if (!snap.empty) {
+            let bDel = writeBatch(db), dc = 0;
+            for (const d of snap.docs) {
+              bDel.delete(d.ref);
+              if (++dc === 450) { await bDel.commit(); bDel = writeBatch(db); dc = 0; }
+            }
+            if (dc > 0) await bDel.commit();
+          }
+
+          // Write new
+          let batch = writeBatch(db), bc = 0, total = 0;
+          for (const row of rows) {
+            const pid = String(row[0] || '').trim();
+            if (!pid) continue;
+            const entry = {
+              projectId:           pid,
+              accountName:         String(row[1]  || '').trim(),
+              accountSegment:      String(row[2]  || '').trim(),
+              projectName:         String(row[3]  || '').trim(),
+              deliveryRegion:      String(row[4]  || '').trim(),
+              region:              String(row[5]  || '').trim(),
+              country:             String(row[6]  || '').trim(),
+              productFamily:       String(row[7]  || '').trim(),
+              solution:            String(row[8]  || '').trim(),
+              integrationType:     String(row[9]  || '').trim(),
+              projectState:        String(row[12] || '').trim(),
+              onHoldReason:        String(row[13] || '').trim(),
+              startDate:           excelDateToStr(row[14]),
+              endDate:             excelDateToStr(row[15]),
+              targetGoLiveDate:    excelDateToStr(row[16]),
+              finalGoLiveDate:     excelDateToStr(row[17]),
+              bookingValue:        typeof row[19] === 'number' ? row[19] : 0,
+              budgetedHours:       typeof row[22] === 'number' ? row[22] : 0,
+              contractedHoursRem:  typeof row[23] === 'number' ? row[23] : 0,
+              billingType:         String(row[24] || '').trim(),
+              psOrderType:         String(row[25] || '').trim(),
+              isEscalated:         row[27] === 1 || row[27] === true,
+              businessMarket:      String(row[28] || '').trim(),
+              solutionsConsultant: String(row[29] || '').trim(),
+              technicalResource:   String(row[30] || '').trim(),
+              health:              String(row[33] || '').trim(),
+              healthIssue:         String(row[34] || '').trim(),
+              utilizationCategory: String(row[35] || '').trim(),
+              projectOwnerManager: String(row[41] || '').trim(),
+              projectOwner:        String(row[42] || '').trim(),
+              currentPhase:        String(row[43] || '').trim() || null,
+              uploadedAt:          Date.now(),
+            };
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'ps_projects_v1', pid);
+            batch.set(docRef, entry);
+            total++;
+            if (++bc === 450) { await batch.commit(); batch = writeBatch(db); bc = 0; }
+          }
+          if (bc > 0) await batch.commit();
+          setStatus({ type: 'success', text: `Done! ${total} projects uploaded.` });
+          setFile(null);
+          setTimeout(() => setActiveTab('overview'), 1500);
+        } catch (err) {
+          console.error(err);
+          setStatus({ type: 'error', text: err.message });
+        } finally {
+          setIsUploading(false);
+        }
+      }, 50);
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  return (
+    <div className="animate-in" style={{ maxWidth: 480, margin: '40px auto' }}>
+      <div style={{
+        background: 'var(--bg-card)', borderRadius: 24,
+        border: '1px solid var(--border)', padding: '40px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        position: 'relative', overflow: 'hidden',
+      }}>
+        <div style={{ position: 'absolute', top: -20, right: -20, opacity: 0.04 }}>
+          <FolderKanban size={160} />
+        </div>
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(167,139,250,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+          <FolderKanban size={26} style={{ color: '#A78BFA' }} />
+        </div>
+        <h3 style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text-1)', margin: '0 0 8px', textAlign: 'center' }}>Upload Project Report</h3>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 24px', textAlign: 'center' }}>Salesforce project export (.xls / .xlsx)</p>
+
+        <input type="file" accept=".xlsx,.xls,.csv" id="proj-file" style={{ display: 'none' }} onChange={e => setFile(e.target.files[0])} />
+        <label htmlFor="proj-file" style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+          padding: '16px', background: '#fff',
+          border: `2px dashed ${file ? '#A78BFA' : 'var(--border)'}`,
+          borderRadius: 12, cursor: 'pointer', fontWeight: 700, fontSize: 13,
+          color: file ? '#A78BFA' : 'var(--text-3)',
+          transition: 'all 0.2s', fontFamily: 'Syne, sans-serif',
+        }}>
+          {file ? <CheckCircle2 size={18} /> : <Search size={18} />}
+          {file ? file.name : 'Select Project Report (.xls)'}
+        </label>
+
+        {file && (
+          <button onClick={processFile} disabled={isUploading} style={{
+            marginTop: 16, width: '100%', padding: '14px',
+            background: isUploading ? '#F0EEE9' : '#0A0A0A',
+            color: isUploading ? 'var(--text-3)' : '#fff',
+            borderRadius: 12, border: 'none', cursor: isUploading ? 'not-allowed' : 'pointer',
+            fontSize: 13, fontWeight: 800, fontFamily: 'Syne, sans-serif', letterSpacing: '-0.01em',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s',
+          }}>
+            {isUploading ? <Loader2 size={16} className="animate-spin" /> : <FolderKanban size={16} />}
+            {isUploading ? 'Processing…' : 'Upload Projects'}
           </button>
         )}
 
